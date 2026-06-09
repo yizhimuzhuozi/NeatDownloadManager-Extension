@@ -727,15 +727,6 @@ if (!window.m) {
   window.neatDownloadManagerExtensionInstance = new N();
 }
 
-function isDownloadLink(target, href) {
-  if (!href) return false;
-  if (target.hasAttribute("download")) return true;
-  var extMatch = href.match(/\.([a-z0-9]{1,8})(?:[?#]|$)/i);
-  if (!extMatch) return false;
-  var ext = extMatch[1].toLowerCase();
-  return /^(zip|exe|dmg|pdf|mp4|m4a|mp3|jpg|jpeg|png|gif|svg|rar|7z|tar|gz|iso|apk|docx?|xlsx?|pptx?|txt|csv|ppt|mpg|mpeg|mkv|avi|wmv|flv|mov|webm|ogg|opus)$/i.test(ext);
-}
-
 function isBlockedHost(hostname) {
   if (!hostname || !blockedHosts || blockedHosts.length === 0) return false;
   return blockedHosts.some(function (host) {
@@ -764,7 +755,6 @@ function handleLinkClick(e) {
 
   var href = target.href;
   if (!href || !/^(https?|ftp):/i.test(href)) return;
-  if (!isDownloadLink(target, href)) return;
 
   var currentHost = window.location.hostname;
   if (isBlockedHost(currentHost)) return;
