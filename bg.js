@@ -1,162 +1,1157 @@
 var blockedHosts = [];
-// 临时放行的 URL 白名单，使用 Set 存储
-const tempWhitelist = new Set();
+var bgInstance = null;
+
+//var count = 0;
+
+function sendDownloadLink(url, pageUrl, title) {
+  if (!bgInstance || !url) return;
+  var req = new T();
+  req["2"] = url;
+  req.pageUrl = pageUrl || "";
+  req["4"] = title || "";
+  req["5"] = req.pageUrl;
+  req["6"] = "normal";
+  bgInstance.i = req;
+  chrome.cookies.getAll({ url: req["2"] }, bgInstance.J.bind(bgInstance));
+}
+
+// 从 chrome.storage.local 加载 blockedHosts，并保持内存中列表更新。
 function updateBlockedHosts() {
-    chrome.storage.local.get(['blockedHosts'], function (result) {
-        blockedHosts = result.blockedHosts || [];
+  chrome.storage.local.get(["blockedHosts"], function (result) {
+    blockedHosts = result.blockedHosts || [];
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      if (tabs && tabs.length) {
+        updateContextMenu(tabs[0].id);
+      }
     });
+  });
 }
 updateBlockedHosts();
 chrome.storage.onChanged.addListener(function (changes, namespace) {
-    if (namespace === 'local' && changes.blockedHosts) {
-        updateBlockedHosts();
-    }
+  if (namespace === "local" && changes.blockedHosts) {
+    updateBlockedHosts();
+  }
 });
+// 若 URL 或触发者 hostname 匹配 blockedHosts 列表，则返回 true。
 function isURLBlocked(url, initiator) {
-    if (!blockedHosts || blockedHosts.length === 0) return false;
-    var uHost = "", iHost = "";
-    try { if (url) uHost = new URL(url).hostname; } catch (e) { }
-    try { if (initiator) iHost = new URL(initiator).hostname; } catch (e) { }
-    return blockedHosts.some(function (block) {
-        // More robust check: exact match or subdomain match
-        var blockRegex = new RegExp("(^|\\.)" + block.replace(/\./g, "\\.") + "$", "i");
-        return (uHost && blockRegex.test(uHost)) || (iHost && blockRegex.test(iHost));
-    });
+  if (!blockedHosts || blockedHosts.length === 0) return false;
+  var uHost = "",
+    iHost = "";
+  try {
+    if (url) uHost = new URL(url).hostname;
+  } catch (e) {}
+  try {
+    if (initiator) iHost = new URL(initiator).hostname;
+  } catch (e) {}
+  return blockedHosts.some(function (block) {
+    // 更稳健的检查：精确匹配或子域名匹配
+    var blockRegex = new RegExp(
+      "(^|\\.)" + block.replace(/\./g, "\\.") + "$",
+      "i",
+    );
+    return (
+      (uHost && blockRegex.test(uHost)) || (iHost && blockRegex.test(iHost))
+    );
+  });
 }
+// 根据当前标签页是否被屏蔽更新扩展上下文菜单标题。
 function updateContextMenu(tabId) {
-    chrome.tabs.get(tabId, function (tab) {
-        if (chrome.runtime.lastError || !tab || !tab.url) return;
-        var isBlocked = isURLBlocked(tab.url);
-        var title = isBlocked ? "Unblock downloads" : "Block downloads";
-        chrome.contextMenus.update("NDM_BlockSite", { title: title });
-    });
+  chrome.tabs.get(tabId, function (tab) {
+    if (chrome.runtime.lastError || !tab || !tab.url) return;
+    var isBlocked = isURLBlocked(tab.url);
+    var title = isBlocked ? "Unblock downloads" : "Block downloads";
+    chrome.contextMenus.update("NDM_BlockSite", { title: title });
+  });
 }
+// 活动标签页改变时更新菜单标题。
 chrome.tabs.onActivated.addListener(function (activeInfo) {
-    updateContextMenu(activeInfo.tabId);
+  updateContextMenu(activeInfo.tabId);
 });
-chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
-    if (changeInfo.status === 'complete' && tab.active) {
-        updateContextMenu(tabId);
-    }
-});
-chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
-    if (message.action === 'tempWhitelist' && message.url) {
-        // 标准化 URL（例如移除末尾的 / 或查询参数？但最好保留原样）
-        const url = message.url;
-        tempWhitelist.add(url);
-        //console.log('临时放行 URL:', url);
 
-        // 5 秒后自动移除
-        setTimeout(() => {
-            tempWhitelist.delete(url);
-            //console.log('临时放行过期:', url);
-        }, 5000);
-    }
+// 标签页加载完成后更新菜单标题。
+chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
+  if (changeInfo.status === "complete" && tab.active) {
+    updateContextMenu(tabId);
+  }
 });
-var h = !1, q = RegExp("^bytes [0-9]+-[0-9]+/([0-9]+)$"), w = "object xmlhttprequest media other main_frame sub_frame image".split(" "), z = ["object", "xmlhttprequest", "media", "other"], A = RegExp("://.+/([^/]+?(?:.([^./]+?))?)(?=[?#]|$)"), aa = [301, 302, 303, 307, 308], ba = RegExp("^(?:application/x-apple-diskimage|application/download|application/force-download|application/x-msdownload|binary/octet-stream)$", "i"), B = RegExp("^(?:FLV|SWF|MP3|MP4|M4V|F4F|F4V|M4A|MPG|MPEG|MPEG4|MPE|AVI|WMV|WMA|WAV|WAVE|ASF|RM|RAM|OGG|OGV|OGM|OGA|MOV|MID|MIDI|3GP|3GPP|QT|WEBM|TS|MKV|AAC|MP2T|MPEGTS|RMVB|VTT|SRT)$",
-    "i"), ca = RegExp("^(?:HTM|HTML|MHT|MHTML|SHTML|SHTM|XHT|XHTM|XHTML|XML|TXT|CSS|JS|JSON|GIF|ICO|JPEG|JPG|PNG|WEBP|BMP|SVG|TIF|TIFF|PDF|PHP|ASP|ASPX|EOT|TTF|WOF|WOFF|WOFF2|MSG|PEM|BR|OTF|ACZ|AZC|CGI|TPL|OSD|M3U8|DO|DICT)$", "i"), da = RegExp("^(?:FLV|AVI|MPG|MPE|WMV|QT|MOV|RM|RAM|WMA|MID|MIDI|AAC|MKV|RMVB)$", "i"), C = RegExp("^(?:F4F|MPEGTS|TS|MP2T)$", "i"), E = {
-        "application/x-apple-diskimage": "DMG", "application/cert-chain+cbor": "MSG", "application/epub+zip": "EPUB", "application/java-archive": "JAR", "video/x-matroska": "MKV",
-        "text/html": "HTML|HTM", "text/css": "CSS", "text/javascript": "JS|JSON", "text/mspg-legacyinfo": "MSI|MSP", "text/plain": "TXT|SRT", "text/srt": "SRT", "text/vtt": "VTT|SRT", "text/xml": "XML|F4M|TTML", "text/x-javascript": "JS|JSON", "text/x-json": "JSON", "application/f4m+xml": "F4M", "application/gzip": "GZ", "application/javascript": "JS", "application/json": "JSON", "application/msword": "DOC|DOCX|DOT|DOTX", "application/pdf": "PDF", "application/ttaf+xml": "DFXP", "application/vnd.apple.mpegurl": "M3U8", "application/zip": "ZIP",
-        "application/x-7z-compressed": "7Z", "application/x-aim": "PLJ", "application/x-compress": "Z", "application/x-compress-7z": "7Z", "application/x-compressed": "ARJ", "application/x-gtar": "TAR", "application/x-msi": "MSI", "application/x-msp": "MSP", "application/x-gzip": "GZ", "application/x-gzip-compressed": "GZ", "application/x-javascript": "JS", "application/x-mpegurl": "M3U8", "application/x-msdos-program": "EXE|DLL", "application/vnd.apple.installer+xml": "MPKG", "application/x-ole-storage": "MSI|MSP", "application/x-rar": "RAR",
-        "application/x-rar-compressed": "RAR", "application/x-sdlc": "EXE|SDLC", "application/x-shockwave-flash": "SWF", "application/x-silverlight-app": "XAP", "application/x-subrip": "SRT", "application/x-tar": "TAR", "application/x-zip": "ZIP", "application/x-zip-compressed": "ZIP", "video/3gpp": "3GP|3GPP", "video/3gpp2": "3GP|3GPP", "video/avi": "AVI", "video/f4f": "F4F", "video/f4m": "F4M", "video/flv": "FLV", "video/mp2t": "TS|M3U8", "video/mp4": "MP4|M4V", "video/mpeg": "MPG|MPEG|MPE", "video/mpegurl": "M3U8|M3U", "video/mpg4": "MP4|M4V",
-        "video/msvideo": "AVI", "video/quicktime": "MOV|QT", "video/webm": "WEBM", "video/x-flash-video": "FLV", "video/x-flv": "FLV", "video/x-mp4": "MP4|M4V", "video/x-mpegurl": "M3U8|M3U", "video/x-mpg4": "MP4|M4V", "video/x-ms-asf": "ASF", "video/x-ms-wmv": "WMV", "video/x-msvideo": "AVI", "audio/3gpp": "3GP|3GPP", "audio/3gpp2": "3GP|3GPP", "audio/mp3": "MP3", "audio/mp4": "M4A|MP4", "audio/mp4a-latm": "M4A|MP4", "audio/mpeg": "MP3", "audio/mpeg4-generic": "M4A|MP4", "audio/mpegurl": "M3U8|M3U", "image/svg+xml": "SVG|SVGZ", "audio/webm": "WEBM",
-        "audio/wav": "WAV", "audio/x-mpeg": "MP3", "audio/x-mpegurl": "M3U8|M3U", "audio/x-ms-wma": "WMA", "audio/x-wav": "WAV", "ilm/tm": "MP3", "image/gif": "GIF|GFA", "image/icon": "ICO|CUR", "image/jpg": "JPG|JPEG", "image/jpeg": "JPG|JPEG", "image/png": "PNG|APNG", "image/tiff": "TIF|TIFF", "image/vnd.microsoft.icon": "ICO|CUR", "image/webp": "WEBP", "image/x-icon": "ICO|CUR", "flv-application/octet-stream": "FLV", "image/x-xbitmap": "XBM", "audio/x-mp3": "MP3", "audio/x-hx-aac-adts": "AAC", "audio/aac": "AAC", "audio/x-aac": "AAC", "application/vnd.rn-realmedia-vbr": "RMVB"
-    };
-function F(a) { return a && unescape(a.split(";", 1).shift().trim()) || "" } function G(a) { return (a = A.exec(a)) ? a[1] || "" : "" } function K(a) { return -1 < a.indexOf(".") ? a.split(".").pop() : "" } function ea(a) { var b; a = a.toUpperCase(); for (b in E) if (-1 < E[b].split("|").indexOf(a)) return b; return "" } function L(a, b) { if (!a) return null; for (var c = 0; c < a.length; c++)if (a[c].name.toLowerCase() == b.toLowerCase()) return a[c].value || a[c].binaryValue || null; return null }
-function M() { for (var a = {}, b = 0; b < arguments.length; b++)for (var c in arguments[b]) arguments[b].hasOwnProperty(c) && (a[c] = arguments[b][c]); return a } function N(a, b) { return a && b && 0 == a.indexOf(b) } function O(a, b) { if (!a || !b) return !1; var c = a.length - b.length; return 0 <= c && a.indexOf(b, c) == c } function P(a, b) { return a && b && 0 <= a.indexOf(b) } function Q(a) { return P(a, "://") ? a.split("://", 1).shift().toLowerCase() || "" : "http" }
-async function R(a, b) { var c = null, d = {}, e, f = b && b["1"] || "GET"; if (b && (e = b.o)) for (var g = 0; g < e.length; g++)N(e[g].name.toLowerCase(), "x-") && (d[e[g].name] = e[g].value); if ("POST" == f && b) { try { S(b, b), b["10"] && (d["Content-Type"] = b["10"]) } catch (m) { } b && b.postData && (c = b.postData) } try { const m = await fetch(a["2"], { method: f, credentials: "include", headers: new Headers(d), body: c }); if (m.ok) { let u = await m.text(); (a.S || function () { })(u) } } catch (m) { } }
-function T() { this["1"] = "GET"; this["2"] = ""; this["3"] = ""; this["4"] = ""; this["5"] = ""; this["6"] = "normal"; this["7"] = 0; this["8"] = ""; this["9"] = ""; this["10"] = ""; this.cookies = this["11"] = ""; this.postData = null }
+// 处理来自内容脚本的一次性 runtime 消息（例如下载链接请求）。
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+  //console.log("收到消息:", message);
+  if (message.action === "downloadLink" && message.url) {
+    var pageUrl = message.pageUrl || (sender && sender.tab && sender.tab.url) || "";
+    var title = message.title || "";
+    sendDownloadLink(message.url, pageUrl, title);
+    //console.log("Download link received:", message.url, "pageUrl:", pageUrl, "title:", title);
+  }
+});
+var h = !1,
+  q = RegExp("^bytes [0-9]+-[0-9]+/([0-9]+)$"),
+  w = "object xmlhttprequest media other main_frame sub_frame image".split(" "),
+  z = ["object", "xmlhttprequest", "media", "other"],
+  A = RegExp("://.+/([^/]+?(?:.([^./]+?))?)(?=[?#]|$)"),
+  aa = [301, 302, 303, 307, 308],
+  ba = RegExp(
+    "^(?:application/x-apple-diskimage|application/download|application/force-download|application/x-msdownload|binary/octet-stream)$",
+    "i",
+  ),
+  B = RegExp(
+    "^(?:FLV|SWF|MP3|MP4|M4V|F4F|F4V|M4A|MPG|MPEG|MPEG4|MPE|AVI|WMV|WMA|WAV|WAVE|ASF|RM|RAM|OGG|OGV|OGM|OGA|MOV|MID|MIDI|3GP|3GPP|QT|WEBM|TS|MKV|AAC|MP2T|MPEGTS|RMVB|VTT|SRT)$",
+    "i",
+  ),
+  ca = RegExp(
+    "^(?:HTM|HTML|MHT|MHTML|SHTML|SHTM|XHT|XHTM|XHTML|XML|TXT|CSS|JS|JSON|GIF|ICO|JPEG|JPG|PNG|WEBP|BMP|SVG|TIF|TIFF|PDF|PHP|ASP|ASPX|EOT|TTF|WOF|WOFF|WOFF2|MSG|PEM|BR|OTF|ACZ|AZC|CGI|TPL|OSD|M3U8|DO|DICT)$",
+    "i",
+  ),
+  da = RegExp(
+    "^(?:FLV|AVI|MPG|MPE|WMV|QT|MOV|RM|RAM|WMA|MID|MIDI|AAC|MKV|RMVB)$",
+    "i",
+  ),
+  C = RegExp("^(?:F4F|MPEGTS|TS|MP2T)$", "i"),
+  E = {
+    "application/x-apple-diskimage": "DMG",
+    "application/cert-chain+cbor": "MSG",
+    "application/epub+zip": "EPUB",
+    "application/java-archive": "JAR",
+    "video/x-matroska": "MKV",
+    "text/html": "HTML|HTM",
+    "text/css": "CSS",
+    "text/javascript": "JS|JSON",
+    "text/mspg-legacyinfo": "MSI|MSP",
+    "text/plain": "TXT|SRT",
+    "text/srt": "SRT",
+    "text/vtt": "VTT|SRT",
+    "text/xml": "XML|F4M|TTML",
+    "text/x-javascript": "JS|JSON",
+    "text/x-json": "JSON",
+    "application/f4m+xml": "F4M",
+    "application/gzip": "GZ",
+    "application/javascript": "JS",
+    "application/json": "JSON",
+    "application/msword": "DOC|DOCX|DOT|DOTX",
+    "application/pdf": "PDF",
+    "application/ttaf+xml": "DFXP",
+    "application/vnd.apple.mpegurl": "M3U8",
+    "application/zip": "ZIP",
+    "application/x-7z-compressed": "7Z",
+    "application/x-aim": "PLJ",
+    "application/x-compress": "Z",
+    "application/x-compress-7z": "7Z",
+    "application/x-compressed": "ARJ",
+    "application/x-gtar": "TAR",
+    "application/x-msi": "MSI",
+    "application/x-msp": "MSP",
+    "application/x-gzip": "GZ",
+    "application/x-gzip-compressed": "GZ",
+    "application/x-javascript": "JS",
+    "application/x-mpegurl": "M3U8",
+    "application/x-msdos-program": "EXE|DLL",
+    "application/vnd.apple.installer+xml": "MPKG",
+    "application/x-ole-storage": "MSI|MSP",
+    "application/x-rar": "RAR",
+    "application/x-rar-compressed": "RAR",
+    "application/x-sdlc": "EXE|SDLC",
+    "application/x-shockwave-flash": "SWF",
+    "application/x-silverlight-app": "XAP",
+    "application/x-subrip": "SRT",
+    "application/x-tar": "TAR",
+    "application/x-zip": "ZIP",
+    "application/x-zip-compressed": "ZIP",
+    "video/3gpp": "3GP|3GPP",
+    "video/3gpp2": "3GP|3GPP",
+    "video/avi": "AVI",
+    "video/f4f": "F4F",
+    "video/f4m": "F4M",
+    "video/flv": "FLV",
+    "video/mp2t": "TS|M3U8",
+    "video/mp4": "MP4|M4V",
+    "video/mpeg": "MPG|MPEG|MPE",
+    "video/mpegurl": "M3U8|M3U",
+    "video/mpg4": "MP4|M4V",
+    "video/msvideo": "AVI",
+    "video/quicktime": "MOV|QT",
+    "video/webm": "WEBM",
+    "video/x-flash-video": "FLV",
+    "video/x-flv": "FLV",
+    "video/x-mp4": "MP4|M4V",
+    "video/x-mpegurl": "M3U8|M3U",
+    "video/x-mpg4": "MP4|M4V",
+    "video/x-ms-asf": "ASF",
+    "video/x-ms-wmv": "WMV",
+    "video/x-msvideo": "AVI",
+    "audio/3gpp": "3GP|3GPP",
+    "audio/3gpp2": "3GP|3GPP",
+    "audio/mp3": "MP3",
+    "audio/mp4": "M4A|MP4",
+    "audio/mp4a-latm": "M4A|MP4",
+    "audio/mpeg": "MP3",
+    "audio/mpeg4-generic": "M4A|MP4",
+    "audio/mpegurl": "M3U8|M3U",
+    "image/svg+xml": "SVG|SVGZ",
+    "audio/webm": "WEBM",
+    "audio/wav": "WAV",
+    "audio/x-mpeg": "MP3",
+    "audio/x-mpegurl": "M3U8|M3U",
+    "audio/x-ms-wma": "WMA",
+    "audio/x-wav": "WAV",
+    "ilm/tm": "MP3",
+    "image/gif": "GIF|GFA",
+    "image/icon": "ICO|CUR",
+    "image/jpg": "JPG|JPEG",
+    "image/jpeg": "JPG|JPEG",
+    "image/png": "PNG|APNG",
+    "image/tiff": "TIF|TIFF",
+    "image/vnd.microsoft.icon": "ICO|CUR",
+    "image/webp": "WEBP",
+    "image/x-icon": "ICO|CUR",
+    "flv-application/octet-stream": "FLV",
+    "image/x-xbitmap": "XBM",
+    "audio/x-mp3": "MP3",
+    "audio/x-hx-aac-adts": "AAC",
+    "audio/aac": "AAC",
+    "audio/x-aac": "AAC",
+    "application/vnd.rn-realmedia-vbr": "RMVB",
+  };
+// 从头部字符串中提取第一个分号分隔的值并进行 URL 解码。
+function F(a) {
+  return (a && unescape(a.split(";", 1).shift().trim())) || "";
+}
+
+// 从 URL 路径中提取文件名或最后一段。
+function G(a) {
+  return (a = A.exec(a)) ? a[1] || "" : "";
+}
+
+// 从字符串中获取文件扩展名。
+function K(a) {
+  return -1 < a.indexOf(".") ? a.split(".").pop() : "";
+}
+// 将文件扩展名映射到已知 MIME 类型键（如果可用）。
+function ea(a) {
+  var b;
+  a = a.toUpperCase();
+  for (b in E) if (-1 < E[b].split("|").indexOf(a)) return b;
+  return "";
+}
+
+// 从头部对象数组中查找指定头部的值。
+function L(a, b) {
+  if (!a) return null;
+  for (var c = 0; c < a.length; c++)
+    if (a[c].name.toLowerCase() == b.toLowerCase())
+      return a[c].value || a[c].binaryValue || null;
+  return null;
+}
+
+// 将一个或多个对象合并到一个新对象中（浅拷贝）。
+function M() {
+  for (var a = {}, b = 0; b < arguments.length; b++)
+    for (var c in arguments[b])
+      arguments[b].hasOwnProperty(c) && (a[c] = arguments[b][c]);
+  return a;
+}
+// 如果字符串 a 以字符串 b 开头，则返回 true。
+function N(a, b) {
+  return a && b && 0 == a.indexOf(b);
+}
+
+// 如果字符串 a 以字符串 b 结尾，则返回 true。
+function O(a, b) {
+  if (!a || !b) return !1;
+  var c = a.length - b.length;
+  return 0 <= c && a.indexOf(b, c) == c;
+}
+// 如果字符串 a 包含子串 b，则返回 true。
+function P(a, b) {
+  return a && b && 0 <= a.indexOf(b);
+}
+
+// 提取并规范化 URL 协议，默认为 http。
+function Q(a) {
+  return P(a, "://") ? a.split("://", 1).shift().toLowerCase() || "" : "http";
+}
+// 使用捕获的请求详情执行后台 fetch，并保留请求头和 post 数据。
+async function R(a, b) {
+  var c = null,
+    d = {},
+    e,
+    f = (b && b["1"]) || "GET";
+  if (b && (e = b.o))
+    for (var g = 0; g < e.length; g++)
+      N(e[g].name.toLowerCase(), "x-") && (d[e[g].name] = e[g].value);
+  if ("POST" == f && b) {
+    try {
+      (S(b, b), b["10"] && (d["Content-Type"] = b["10"]));
+    } catch (m) {}
+    b && b.postData && (c = b.postData);
+  }
+  try {
+    const m = await fetch(a["2"], {
+      method: f,
+      credentials: "include",
+      headers: new Headers(d),
+      body: c,
+    });
+    if (m.ok) {
+      let u = await m.text();
+      (a.S || function () {})(u);
+    }
+  } catch (m) {}
+}
+// 请求描述符构造函数，用于构建下载捕获对象。
+function T() {
+  this["1"] = "GET";
+  this["2"] = "";
+  this["3"] = "";
+  this["4"] = "";
+  this["5"] = "";
+  this["6"] = "normal";
+  this["7"] = 0;
+  this["8"] = "";
+  this["9"] = "";
+  this["10"] = "";
+  this.cookies = this["11"] = "";
+  this.postData = null;
+}
+// 扩展的主后台控制器。初始化监听器和上下文菜单状态。
 function U() {
-    var a = this.constructor.prototype, b; for (b in a) this[b] = a[b].bind(this); this.H = {}; this.h = {}; this.m = {}; this.fa = 1; this.u = ""; this.C = !1; chrome.contextMenus.removeAll(); chrome.contextMenus.create({ title: "Download", id: "NDM_CtxMenu", contexts: ["link", "image"] }); chrome.contextMenus.create({ id: "NDM_BlockSite", title: "Block downloads", contexts: ["all"] }); this.j(chrome.contextMenus.onClicked, this.W); this.j(chrome.downloads.onCreated, this.X); this.j(chrome.runtime.onConnect, this.Z); this.j(chrome.webRequest.onBeforeRequest, this.T, {
-        urls: ["http://*/*", "https://*/*", "ftp://*/*"],
-        types: w
-    }, ["requestBody"]); this.j(chrome.webRequest.onBeforeSendHeaders, this.U, { urls: ["https://*/*", "http://*/*"], types: w }, ["requestHeaders"]); this.j(chrome.webRequest.onHeadersReceived, this.V, { urls: ["<all_urls>"], types: w }, ["responseHeaders"]); this.j(chrome.webRequest.onCompleted, this.N, { urls: ["<all_urls>"] }); this.j(chrome.webRequest.onErrorOccurred, this.N, { urls: ["<all_urls>"] }); this.j(chrome.webNavigation.onHistoryStateUpdated, this.Y); chrome.action.onClicked.addListener(this.M); this.v = !1; chrome.action.setBadgeBackgroundColor({ color: "#FF3333" });
-    this.M(); var c = this; this.F = !0; chrome.storage.local.get(["ShowMediaPanel"], function (d) { -1 == d.ShowMediaPanel && (c.F = !1) }); this.i = this.G = null; this.D = !1; this.L()
-} var V = U.prototype; V.M = function () { var a = (this.v = !this.v) ? "" : "Off"; chrome.action.setTitle({ title: this.v ? "" : "Download catcher is Off\r\nClick to toggle catching" }); chrome.action.setBadgeText({ text: a }) }; V.Y = function (a) { var b = this.h[[a.tabId, a.frameId]]; b && b["2"] != a.url && (b.postMessage([11, a.url]), b["2"] = a.url) };
-V.X = function (a) {
-    // 检查白名单
-    if (tempWhitelist.has(a.url) || tempWhitelist.has(a.finalUrl)) {
-        // 若匹配，从白名单移除并放行（不取消）
-        tempWhitelist.delete(a.url);
-        tempWhitelist.delete(a.finalUrl);
-        return;
-    }
-    // Added early block check for downloads
-    if (isURLBlocked(a.url, a.referrer) || isURLBlocked(a.finalUrl, a.referrer)) {
-        return;
-    }
-    h || !this.v ? this.u = "" : this.u != a.finalUrl && this.u != a.url ? this.u = "" : (this.u = "", chrome.downloads.cancel(a.id), chrome.downloads.erase({ id: a.id }))
+  var a = this.constructor.prototype,
+    b;
+  for (b in a) this[b] = a[b].bind(this);
+  this.H = {};
+  this.h = {};
+  this.m = {};
+  this.fa = 1;
+  this.u = "";
+  this.C = !1;
+  chrome.contextMenus.removeAll();
+  chrome.contextMenus.create({
+    title: "Download",
+    id: "NDM_CtxMenu",
+    contexts: ["link", "image"],
+  });
+  chrome.contextMenus.create({
+    id: "NDM_BlockSite",
+    title: "Block downloads",
+    contexts: ["all"],
+  });
+  this.j(chrome.contextMenus.onClicked, this.W);
+  this.j(chrome.downloads.onCreated, this.X);
+  this.j(chrome.runtime.onConnect, this.Z);
+  this.j(
+    chrome.webRequest.onBeforeSendHeaders,
+    this.U,
+    { urls: ["https://*/*", "http://*/*"], types: w },
+    ["requestHeaders"],
+  );
+  this.j(
+    chrome.webRequest.onHeadersReceived,
+    this.V,
+    { urls: ["<all_urls>"], types: w },
+    ["responseHeaders"],
+  );
+  this.j(chrome.webRequest.onCompleted, this.N, { urls: ["<all_urls>"] });
+  this.j(chrome.webRequest.onErrorOccurred, this.N, { urls: ["<all_urls>"] });
+  this.j(chrome.webNavigation.onHistoryStateUpdated, this.Y);
+  chrome.action.onClicked.addListener(this.M);
+  this.v = !0;
+  chrome.action.setBadgeBackgroundColor({ color: "#FF3333" });
+  var c = this;
+  this.F = !0;
+  chrome.storage.local.get(
+    ["ShowMediaPanel", "ndmCatchEnabled"],
+    function (d) {
+      -1 == d.ShowMediaPanel && (c.F = !1);
+      if (typeof d.ndmCatchEnabled === "boolean") {
+        c.v = d.ndmCatchEnabled;
+      }
+      chrome.action.setTitle({
+        title: c.v ? "" : "Download catcher is Off\r\nClick to toggle catching",
+      });
+      chrome.action.setBadgeText({ text: c.v ? "" : "Off" });
+    },
+  );
+  this.i = this.G = null;
+  this.D = !1;
+  this.L();
+}
+var V = U.prototype;
+
+// 用户点击工具栏按钮时切换扩展图标徽章和标题。
+V.M = function () {
+  var a = (this.v = !this.v) ? "" : "Off";
+  chrome.action.setTitle({
+    title: this.v ? "" : "Download catcher is Off\r\nClick to toggle catching",
+  });
+  chrome.action.setBadgeText({ text: a });
+  chrome.storage.local.set({ ndmCatchEnabled: this.v });
 };
+// 安全发送消息到内容脚本端口，避免 bfcache / 断开连接端口导致未捕获异常。
+V.sendToPort = function (port, message) {
+  if (!port) return;
+  try {
+    port.postMessage(message);
+  } catch (e) {
+    console.warn("NDM: failed to postMessage to port, removing stale port", e, message);
+    if (port.id) delete this.H[port.id];
+    for (var key in this.h) if (this.h[key] === port) delete this.h[key];
+  }
+};
+
+// 通知已连接的内容脚本标签页/框架 URL 已更改。
+V.Y = function (a) {
+  var b = this.h[[a.tabId, a.frameId]];
+  if (b && b["2"] != a.url) {
+    this.sendToPort(b, [11, a.url]);
+    b["2"] = a.url;
+  }
+};
+
+// 处理新创建的下载，在下载捕获器激活时取消这些下载。
+V.X = function (a) {
+  //console.log(count++ + " - downloads.onCreated event:", a);
+  //console.log("NDM DEBUG: downloads.onCreated - processing ->", a.url || a.finalUrl);
+  // blockedHosts decision now occurs in ct.js content script.
+  //console.log("NDM DEBUG: downloads.onCreated - proceeding ->", this);
+  h || !this.v
+    ? (this.u = "")
+    : this.u != a.finalUrl && this.u != a.url
+      ? (this.u = "")
+      : ((this.u = ""),
+        chrome.downloads.cancel(a.id),
+        chrome.downloads.erase({ id: a.id }));
+};
+// 通过 websocket 将清理后的下载请求详情发送给 Neat Download Manager。
 V.I = async function (a) {
-    if (this.D) {
-        var b = "1:" + a["1"] + "\r\n"; b += "2:" + a["2"] + "\r\n"; a["3"] && (b += "3:" + a["3"] + "\r\n"); b += "6:" + (a["6"] || "normal") + "\r\n"; a["4"] && (b += "4:" + a["4"] + "\r\n"); if (a.pageUrl) { var c = a.pageUrl, d = ""; c &&= c.trim(); c && (d = (new URL(c)).origin); b += "Origin: " + d + "\r\n" } if (a.pageUrl) { if (c = a.pageUrl) d = c.lastIndexOf("#"), c = 0 > d || d < c.indexOf("?") ? c : c.substr(0, d); b += "Referer: " + c + "\r\n" } a["5"] && (b += "5:" + a["5"] + "\r\n"); a.cookies && (b += "Cookie: " + a.cookies + "\r\n"); a["10"] && (b += "Content-Type: " + a["10"] +
-            "\r\n"); a["11"] && (b += "Content-Disposition: " + a["11"] + "\r\n"); a["9"] && (b += "9:" + a["9"] + "\r\n"); for (var e in a) N(e.toLowerCase(), "x-") && (b += e + ": " + a[e] + "\r\n"); "POST" == a["1"] && (a["7"] && (b += "7:" + a["7"] + "\r\n"), a["8"] && (b += "8:" + a["8"] + "\r\n"), b = a.postData ? b + ("__0NeatPostData9__:" + a.postData) : b + "Content-Length: 0\r\n"); if (!(118784 < b.length)) if (a["3"]) this.G.send(b), this.i = null; else if ("POST" == a["1"] || !this.C || a["7"] && a["8"]) "POST" != a["1"] && this.C && (b += "8:" + a["8"] + "\r\n", b += "7:" + a["7"] + "\r\n"), this.G.send(b),
-                this.i = null; else try { const f = await fetch(a["2"], { method: "HEAD", credentials: "include" }); f.ok && (a["8"] = a["8"] || f.headers.get("content-type") || "", a["7"] = a["7"] || f.headers.get("Content-Length") || 0, b += "8:" + a["8"] + "\r\n", b += "7:" + a["7"] + "\r\n", this.G.send(b), this.i = null) } catch (f) { }
-    } else this.i = a, this.L()
-}; V.L = function () { var a = new WebSocket("ws://127.0.0.1:10007/download", "neatextension.v1"); a.onopen = this.ea; a.onclose = this.ba; a.onmessage = this.da; a.onerror = this.ca; this.G = a };
-V.ea = function () { this.D = !0; this.i && this.I(this.i) }; V.ba = function () { this.D = !1; this.i = null }; V.da = function (a) { a = a.data; "waiting" == a ? this.C = !0 : "nowaiting" == a ? this.C = !1 : !P(a, "Version") && N(a, "ShowPanelChrome") && (a = "1" == a.split("=")[1], a != this.F && (this.F = a, chrome.storage.local.set({ ka: a ? 1 : -1 }, function () { }), this.ga([13, a]))) }; V.ca = function () { this.D = !1; if (this.i) { var a = this; chrome.tabs.query({ currentWindow: !0, active: !0 }, function (b) { b && b.length && (b = a.h[[b[0].id, 0]]) && b.postMessage([15]) }) } this.i = null };
-V.J = function (a) { if (this.i) { var b = ""; if (a && 0 < a.length) for (var c = 0; c < a.length; c++)b += a[c].name + "=" + a[c].value + (c < a.length - 1 ? "; " : ""); b = b.trim(); this.i.cookies = b; this.I(this.i) } }; V.W = function (a, b) { if (a.menuItemId === "NDM_BlockSite") return; var c = Q(a.linkUrl); !c || "ftp" != c && "http" != c && "https" != c || "ftp" == c && !G(a.linkUrl) || (c = new T, c["2"] = a.linkUrl || a.srcUrl, c.pageUrl = a.pageUrl, c["4"] = b && b.title || "", b && b.url && (c["5"] = b.url), !c["5"] && (c["5"] = a.pageUrl), this.i = c, chrome.cookies.getAll({ url: c["2"] }, this.J)) }; function W(a) { this.h = a } var X = W.prototype;
-X.j = function (a) { var b = ""; if (!a) return b; if ((a = a.split(",")) && a.length) for (var c = 0; c < a.length; c++) { var d = a[c].split("="); d && 2 == d.length && ("BANDWIDTH" == d[0].toString().trim() && (b += parseInt(parseInt(d[1]) / 1024) + " Kbps "), "RESOLUTION" == d[0].toString().trim() && (b += d[1] + " ")) } return b.trim() };
-X.i = function (a, b) {
-    var c = [], d = 0, e = "", f = this; b = b.split(/[\r\n]+/); if (0 != b.length && "#EXTM3U" == b[0].trim()) {
-        for (var g = !1, m = !1, u = !1, n = "", p = RegExp("^#(EXT[^\\s:]+)(?::(.*))"), r = 1; r < b.length; r++) { var k = b[r].trim(); k && ("#" == k[0] ? 0 == k.indexOf("#EXT") && (k = p.exec(k)) && (g || (g = "EXTINF" == k[1]) && (n = k[2]), m || (m = "EXT-X-STREAM-INF" == k[1]) && (n = k[2]), u ||= "EXT-X-BYTERANGE" == k[1]) : (g && (d += parseFloat(n), g = !1), m && (c.push({ 2: (new URL(k, a["2"])).href, tags: n }), m = !1), u && !e && (e = (new URL(k, a["2"])).href))) } if (e) {
-            b = ""; d && (60 < d &&
-                (b += parseInt(d / 60) + " min "), b += parseInt(d % 60) && parseInt(d % 60) + " sec"); var l = { 6: "media", fEx: "ts", 4: "TS File " + b, fDu: b }; l = M(l, { 1: a["1"], 2: e, tabId: a.tabId, frameId: a.frameId, fS: a["7"], fileName: a.fileName }); Y(a, l); "POST" == l["1"] && S(a, l); setTimeout(function () { f.h.A(l) }, 2500)
-        } else c.length ? setTimeout(function () { for (var x = 0; x < c.length; x++)f.h.A(M({ tabId: a.tabId, frameId: a.frameId }, { 1: "GET", 2: c[x]["2"], 6: "hls", fEx: "ts", 4: "TS File " + f.j(c[x].tags) })) }, 2500) : 0 < d && (b = "", 60 < d && (b += parseInt(d / 60) + " min "), b += parseInt(d %
-            60) && parseInt(d % 60) + " sec", l = { 6: "hls", fEx: "ts", 4: "TS File " + b, fDu: b }, l = M(l, { 1: a["1"], 2: a["2"], tabId: a.tabId, frameId: a.frameId, fS: a["7"], fileName: a.fileName }), Y(a, l), "POST" == l["1"] && S(a, l), setTimeout(function () { f.h.A(l) }, 2500))
+  if (this.D) {
+    var b = "1:" + a["1"] + "\r\n";
+    b += "2:" + a["2"] + "\r\n";
+    a["3"] && (b += "3:" + a["3"] + "\r\n");
+    b += "6:" + (a["6"] || "normal") + "\r\n";
+    a["4"] && (b += "4:" + a["4"] + "\r\n");
+    if (a.pageUrl) {
+      var c = a.pageUrl,
+        d = "";
+      c &&= c.trim();
+      c && (d = new URL(c).origin);
+      b += "Origin: " + d + "\r\n";
     }
-}; V.A = function (a) { var b = this.h[[a.tabId, a.frameId]]; if (!b && (b = this.h[[a.tabId, 0]], !b)) return; var c = a["2"], d = 0, e; var f = 0; for (e = c.length; f < e; f++) { var g = c.charCodeAt(f); d = (d << 5) - d + g; d |= 0 } a.id = d; b.postMessage([1, a, b["2"]]) }; V.N = function (a) { delete this.m[a.requestId] };
+    if (a.pageUrl) {
+      if ((c = a.pageUrl))
+        ((d = c.lastIndexOf("#")),
+          (c = 0 > d || d < c.indexOf("?") ? c : c.substr(0, d)));
+      b += "Referer: " + c + "\r\n";
+    }
+    a["5"] && (b += "5:" + a["5"] + "\r\n");
+    a.cookies && (b += "Cookie: " + a.cookies + "\r\n");
+    a["10"] && (b += "Content-Type: " + a["10"] + "\r\n");
+    a["11"] && (b += "Content-Disposition: " + a["11"] + "\r\n");
+    a["9"] && (b += "9:" + a["9"] + "\r\n");
+    for (var e in a)
+      N(e.toLowerCase(), "x-") && (b += e + ": " + a[e] + "\r\n");
+    "POST" == a["1"] &&
+      (a["7"] && (b += "7:" + a["7"] + "\r\n"),
+      a["8"] && (b += "8:" + a["8"] + "\r\n"),
+      (b = a.postData
+        ? b + ("__0NeatPostData9__:" + a.postData)
+        : b + "Content-Length: 0\r\n"));
+    if (!(118784 < b.length))
+      if (a["3"]) (this.G.send(b), (this.i = null));
+      else if ("POST" == a["1"] || !this.C || (a["7"] && a["8"]))
+        ("POST" != a["1"] &&
+          this.C &&
+          ((b += "8:" + a["8"] + "\r\n"), (b += "7:" + a["7"] + "\r\n")),
+          this.G.send(b),
+          (this.i = null));
+      else
+        try {
+          const f = await fetch(a["2"], {
+            method: "HEAD",
+            credentials: "include",
+          });
+          f.ok &&
+            ((a["8"] = a["8"] || f.headers.get("content-type") || ""),
+            (a["7"] = a["7"] || f.headers.get("Content-Length") || 0),
+            (b += "8:" + a["8"] + "\r\n"),
+            (b += "7:" + a["7"] + "\r\n"),
+            this.G.send(b),
+            (this.i = null));
+        } catch (f) {}
+  } else ((this.i = a), this.L());
+};
+// 创建并初始化到桌面 NDM 应用的持久 websocket 连接。
+V.L = function () {
+  var a = new WebSocket("ws://127.0.0.1:10007/download", "neatextension.v1");
+  a.onopen = this.ea;
+  a.onclose = this.ba;
+  a.onmessage = this.da;
+  a.onerror = this.ca;
+  this.G = a;
+};
+// websocket 打开回调：标记 socket 就绪并发送任何排队请求。
+V.ea = function () {
+  this.D = !0;
+  this.i && this.I(this.i);
+};
+
+// websocket 关闭回调：标记 socket 已断开。
+V.ba = function () {
+  this.D = !1;
+  this.i = null;
+};
+// websocket 消息处理器：处理 NDM 状态事件。
+V.da = function (a) {
+  a = a.data;
+  "waiting" == a
+    ? (this.C = !0)
+    : "nowaiting" == a
+      ? (this.C = !1)
+      : !P(a, "Version") &&
+        N(a, "ShowPanelChrome") &&
+        ((a = "1" == a.split("=")[1]),
+        a != this.F &&
+          ((this.F = a),
+          chrome.storage.local.set({ ka: a ? 1 : -1 }, function () {}),
+          this.ga([13, a])));
+};
+// websocket 错误回调：清除排队请求并通知活动标签页。
+V.ca = function () {
+  this.D = !1;
+  if (this.i) {
+    var a = this;
+    chrome.tabs.query({ currentWindow: !0, active: !0 }, function (b) {
+      b && b.length && (b = a.h[[b[0].id, 0]]) && a.sendToPort(b, [15]);
+    });
+  }
+  this.i = null;
+};
+
+// chrome.cookies.getAll 回调：将 cookies 附加到待发送请求并发送它。
+V.J = function (a) {
+  if (this.i) {
+    var b = "";
+    if (a && 0 < a.length)
+      for (var c = 0; c < a.length; c++)
+        b += a[c].name + "=" + a[c].value + (c < a.length - 1 ? "; " : "");
+    b = b.trim();
+    this.i.cookies = b;
+    this.I(this.i);
+  }
+};
+// 处理上下文菜单“Download”点击并创建下载请求对象。
+V.W = function (a, b) {
+  if (a.menuItemId === "NDM_BlockSite") return;
+
+  var url = a.linkUrl || a.srcUrl;
+  if (!url) return;
+
+  // 如果扩展关闭或当前 host 被阻止，则直接触发浏览器原生下载。
+  if (!this.v || isURLBlocked(url, a.pageUrl || a.linkUrl)) {
+    chrome.downloads.download({ url: url, saveAs: false }, function (downloadId) {
+      if (chrome.runtime.lastError) {
+        console.warn("NDM fallback download failed:", chrome.runtime.lastError.message);
+      }
+    });
+    return;
+  }
+
+  var c = Q(url);
+  !c ||
+    ("ftp" != c && "http" != c && "https" != c) ||
+    ("ftp" == c && !G(url)) ||
+    ((c = new T()),
+    (c["2"] = url),
+    (c.pageUrl = a.pageUrl),
+    (c["4"] = (b && b.title) || ""),
+    b && b.url && (c["5"] = b.url),
+    !c["5"] && (c["5"] = a.pageUrl),
+    (this.i = c),
+    chrome.cookies.getAll({ url: c["2"] }, this.J)
+  );
+};
+// 帮助对象，用于处理 HLS/媒体流解析和下载条目创建。
+function W(a) {
+  this.h = a;
+}
+var X = W.prototype;
+// 将 HLS EXT-X-STREAM-INF 带宽/分辨率字符串解析为可读标签。
+X.j = function (a) {
+  var b = "";
+  if (!a) return b;
+  if ((a = a.split(",")) && a.length)
+    for (var c = 0; c < a.length; c++) {
+      var d = a[c].split("=");
+      d &&
+        2 == d.length &&
+        ("BANDWIDTH" == d[0].toString().trim() &&
+          (b += parseInt(parseInt(d[1]) / 1024) + " Kbps "),
+        "RESOLUTION" == d[0].toString().trim() && (b += d[1] + " "));
+    }
+  return b.trim();
+};
+// 解析 M3U8 播放列表内容并为分段或流变体创建下载条目。
+X.i = function (a, b) {
+  var c = [],
+    d = 0,
+    e = "",
+    f = this;
+  b = b.split(/[\r\n]+/);
+  if (0 != b.length && "#EXTM3U" == b[0].trim()) {
+    for (
+      var g = !1,
+        m = !1,
+        u = !1,
+        n = "",
+        p = RegExp("^#(EXT[^\\s:]+)(?::(.*))"),
+        r = 1;
+      r < b.length;
+      r++
+    ) {
+      var k = b[r].trim();
+      k &&
+        ("#" == k[0]
+          ? 0 == k.indexOf("#EXT") &&
+            (k = p.exec(k)) &&
+            (g || ((g = "EXTINF" == k[1]) && (n = k[2])),
+            m || ((m = "EXT-X-STREAM-INF" == k[1]) && (n = k[2])),
+            (u ||= "EXT-X-BYTERANGE" == k[1]))
+          : (g && ((d += parseFloat(n)), (g = !1)),
+            m && (c.push({ 2: new URL(k, a["2"]).href, tags: n }), (m = !1)),
+            u && !e && (e = new URL(k, a["2"]).href)));
+    }
+    if (e) {
+      b = "";
+      d &&
+        (60 < d && (b += parseInt(d / 60) + " min "),
+        (b += parseInt(d % 60) && parseInt(d % 60) + " sec"));
+      var l = { 6: "media", fEx: "ts", 4: "TS File " + b, fDu: b };
+      l = M(l, {
+        1: a["1"],
+        2: e,
+        tabId: a.tabId,
+        frameId: a.frameId,
+        fS: a["7"],
+        fileName: a.fileName,
+      });
+      Y(a, l);
+      "POST" == l["1"] && S(a, l);
+      setTimeout(function () {
+        f.h.A(l);
+      }, 2500);
+    } else
+      c.length
+        ? setTimeout(function () {
+            for (var x = 0; x < c.length; x++)
+              f.h.A(
+                M(
+                  { tabId: a.tabId, frameId: a.frameId },
+                  {
+                    1: "GET",
+                    2: c[x]["2"],
+                    6: "hls",
+                    fEx: "ts",
+                    4: "TS File " + f.j(c[x].tags),
+                  },
+                ),
+              );
+          }, 2500)
+        : 0 < d &&
+          ((b = ""),
+          60 < d && (b += parseInt(d / 60) + " min "),
+          (b += parseInt(d % 60) && parseInt(d % 60) + " sec"),
+          (l = { 6: "hls", fEx: "ts", 4: "TS File " + b, fDu: b }),
+          (l = M(l, {
+            1: a["1"],
+            2: a["2"],
+            tabId: a.tabId,
+            frameId: a.frameId,
+            fS: a["7"],
+            fileName: a.fileName,
+          })),
+          Y(a, l),
+          "POST" == l["1"] && S(a, l),
+          setTimeout(function () {
+            f.h.A(l);
+          }, 2500));
+  }
+};
+// 根据标签页/框架将解析后的下载条目发送到正确的内容脚本。
+V.A = function (a) {
+  var b = this.h[[a.tabId, a.frameId]];
+  if (!b && ((b = this.h[[a.tabId, 0]]), !b)) return;
+  var c = a["2"],
+    d = 0,
+    e;
+  var f = 0;
+  for (e = c.length; f < e; f++) {
+    var g = c.charCodeAt(f);
+    d = (d << 5) - d + g;
+    d |= 0;
+  }
+  a.id = d;
+  this.sendToPort(b, [1, a, b["2"]]);
+};
+// 当 webRequest 完成或出错时，移除存储的请求元数据。
+V.N = function (a) {
+  delete this.m[a.requestId];
+};
+
+// 将 webRequest requestBody 的原始字节或 formData 转换为序列化字符串。
 function fa(a, b) {
-    if (!a) return null; var c = a.raw; if (c) { a = ""; for (b = 0; b < c.length; b++) { var d = c[b].bytes; if (!d) return null; d = new Uint8Array(d); for (var e = d.length, f = 0; f < e; f++)a += String.fromCharCode(d[f]) } return a } c = a.formData; if (!c) return null; e = F(b); a = []; e &&= e.toLowerCase(); if ("application/x-www-form-urlencoded" == e) { for (d in c) for (e = c[d], d = d.split(" ").map(encodeURIComponent).join("+"), b = 0; b < e.length; b++)a.length && a.push("&"), a.push(d, "=", e[b].split(" ").map(encodeURIComponent).join("+")); return a.join("") } if ("multipart/form-data" ==
-        e) { (f = Z(b, "boundary")) || (f = "----WebKitFormBoundary" + Math.random().toString(36).substr(2)); for (d in c) for (e = c[d], b = 0; b < e.length; b++)a.push("--", f, '\r\nContent-Disposition: form-data; name="', d, '"\r\n\r\n', e[b], "\r\n"); a.push("--", f, "--\r\n"); return a.join("") } return null
+  if (!a) return null;
+  var c = a.raw;
+  if (c) {
+    a = "";
+    for (b = 0; b < c.length; b++) {
+      var d = c[b].bytes;
+      if (!d) return null;
+      d = new Uint8Array(d);
+      for (var e = d.length, f = 0; f < e; f++) a += String.fromCharCode(d[f]);
+    }
+    return a;
+  }
+  c = a.formData;
+  if (!c) return null;
+  e = F(b);
+  a = [];
+  e &&= e.toLowerCase();
+  if ("application/x-www-form-urlencoded" == e) {
+    for (d in c)
+      for (
+        e = c[d], d = d.split(" ").map(encodeURIComponent).join("+"), b = 0;
+        b < e.length;
+        b++
+      )
+        (a.length && a.push("&"),
+          a.push(d, "=", e[b].split(" ").map(encodeURIComponent).join("+")));
+    return a.join("");
+  }
+  if ("multipart/form-data" == e) {
+    (f = Z(b, "boundary")) ||
+      (f = "----WebKitFormBoundary" + Math.random().toString(36).substr(2));
+    for (d in c)
+      for (e = c[d], b = 0; b < e.length; b++)
+        a.push(
+          "--",
+          f,
+          '\r\nContent-Disposition: form-data; name="',
+          d,
+          '"\r\n\r\n',
+          e[b],
+          "\r\n",
+        );
+    a.push("--", f, "--\r\n");
+    return a.join("");
+  }
+  return null;
 }
 V.V = function (a) {
-    if (tempWhitelist.has(a.url)) {
-        tempWhitelist.delete(a.url);
-        return;
-    }
-    if (isURLBlocked(a.url, a.initiator)) return; var b, c = a.requestId, d = this; if (b = this.m[c]) {
-        var e = a.url, f = a.type, g = 0 <= z.indexOf(f), m = a.method.toUpperCase(), u = Q(e); if (!u || "http" != u && "https" != u || "GET" != m && "POST" != m) delete this.m[c]; else {
-            b.B = a.responseHeaders; var n = L(b.B, "Content-Type"), p = F(n).toLowerCase(); if ("image" == f && p && N(p.toLowerCase(), "image/")) delete this.m[c]; else {
-                var r = L(b.B, "Content-Disposition"), k = "attachment" == F(r).toLowerCase(); a = parseInt(a.statusLine.split(" ", 2).pop()) || 0; b.ha = 0 <= aa.indexOf(a); if (!b.ha) {
-                    if (200 == a ||
-                        206 == a) {
-                        a = L(b.B, "Content-Length"); var l = L(b.B, "Content-Range"), x = null; l && (l = q.exec(l)) && (a = l[1]); a && (x = parseInt(a)); if (0 !== x) if (b["2"] = e, b["8"] = n, b["7"] = x, b.type = f, b.protocol = u, b["1"] = m, b.R = O(f, "_frame"), f = new URL(e), e = f.hostname, f = f.pathname, (m = f.split("/").pop().trim()) && (m = m.split("?").shift().trim()), b.l = m || "", b.s = K(b.l), b.K = Z(r, "filename") || Z(n, "name"), b.P = b.K && K(b.K) || "", n = p ? E[p] : !1, b.O = (n ? n.split("|").shift() : "").toLowerCase(), b.g = b.O || b.P || b.s || "", b.fileName = b.K || b.l || "", b.fileName && (n = b.fileName.lastIndexOf("."),
-                            -1 < n && (b.fileName = b.fileName.substr(0, n).trim())), b.fileName && b.g && (b.fileName += "." + b.g), !p && b.g && (p = ea(b.g)), n = "main_frame" == b.type && B.test(b.g) && !C.test(b.g), r = ["js", "txt", "dict"], r = -1 < r.indexOf(b.g) || -1 < r.indexOf(b.s), P(b.l.toLowerCase(), "manif") || P(b.l.toLowerCase(), "favicon.ico") || P(b.l.toLowerCase(), "pem.msg") || O(b.l.toLowerCase(), ".wasm") || P(b.l.toLowerCase(), ".json") || P(b.O.toLowerCase(), "json") || P(b.P.toLowerCase(), "json") || O(b.l.toLowerCase(), ".dict") || !(n || "other" == b.type && B.test(b.g) ||
-                                (b.R || !g) && da.test(b.g) || (b.R || "other" == b.type) && (k && !r || ba.test(p) || b.g && !B.test(b.g) && !ca.test(b.g)))) {
-                            k = "vtt" == b.g.toLowerCase() || "vtt" == b.s.toLowerCase() || "srt" == b.g.toLowerCase() || "srt" == b.s.toLowerCase(); var H = null; "m3u8" == b.g.toLowerCase() || "m3u8" == b.s.toLowerCase() ? H = new W(this) : k || "POST" == b["1"] || P(e.toLowerCase(), "vimeo") || P(e.toLowerCase(), "youtube") || P(e.toLowerCase(), "google") || "txt" != b.g.toLowerCase() && "js" != b.g.toLowerCase() || "xmlhttprequest" != b.type || b["7"] && 307200 < b["7"] || (H = new W(this));
-                            if (H) R({ 2: b["2"], S: function (t) { H.i(M({}, b), t) } }, M({}, b)); else if (g && "player.vimeo.com" == e && N(f, "/video/") && "application/json" == p) R({ 2: b["2"], S: function (t) { var y = null; try { y = JSON.parse(t) } catch (D) { } if (y) { var I = y.request.files.progressive; I && setTimeout(function () { for (var D = 0; D < I.length; D++)d.A({ 1: "GET", 2: I[D].url, 6: "media", tabId: b.tabId, frameId: b.frameId, fEx: "mp4", 4: "MP4 File " + I[D].quality }) }, 2500) } } }, b); else if ((g || k) && (B.test(b.g) || B.test(b.s)) && !C.test(b.g) && (!b["7"] || 512E3 < b["7"] || k) && !("ASF" ==
-                                b.g && 256E4 >= b["7"]) && "DCLK-AdSvr" != L(b.B, "Server")) { var J = { 2: b["2"], 6: "media", 1: b["1"], tabId: b.tabId, frameId: b.frameId, fEx: B.test(b.g) ? b.g : b.s, 7: b["7"], 8: b["8"], fS: b["7"], fileName: b.fileName }; "POST" == J["1"] && S(b, J); Y(b, J); setTimeout(function () { d.A(J) }, 2E3) }
-                        } else if (h || !this.v) this.u = ""; else {
-                            this.u = b["2"]; g = d.h[[b.tabId, b.frameId]]; p = d.h[[b.tabId, 0]]; var v = M(new T, { 2: b["2"], 1: b["1"], 4: p && p["4"] || g && g["4"], 5: p && p["2"] || g && g["2"], 7: b["7"], 8: b["8"], pageUrl: g && g["2"] || b["2"] }); chrome.tabs.query({
-                                active: !0,
-                                currentWindow: !0
-                            }, function (t) { if (t && t.length && (b["2"] == t[0].pendingUrl || b["2"] == t[0].url) && !v["5"] && t[0].openerTabId) { var y = d.h[[t[0].openerTabId, 0]]; v["5"] = y && y["2"]; v["4"] = y && y["4"]; B.test(b.g) && (chrome.tabs.remove(t[0].id), v["6"] = "media") } }); "POST" == v["1"] && S(b, v); Y(b, v); d.i = v; chrome.cookies.getAll({ url: v["2"] }, d.J)
+  //console.log("NDM DEBUG: onHeadersReceived event:", a);
+  // blockedHosts decision now occurs in ct.js content script.
+  var b,
+    c = a.requestId,
+    d = this;
+  if ((b = this.m[c])) {
+    var e = a.url,
+      f = a.type,
+      g = 0 <= z.indexOf(f),
+      m = a.method.toUpperCase(),
+      u = Q(e);
+    if (!u || ("http" != u && "https" != u) || ("GET" != m && "POST" != m))
+      delete this.m[c];
+    else {
+      b.B = a.responseHeaders;
+      var n = L(b.B, "Content-Type"),
+        p = F(n).toLowerCase();
+      if ("image" == f && p && N(p.toLowerCase(), "image/")) delete this.m[c];
+      else {
+        var r = L(b.B, "Content-Disposition"),
+          k = "attachment" == F(r).toLowerCase();
+        a = parseInt(a.statusLine.split(" ", 2).pop()) || 0;
+        b.ha = 0 <= aa.indexOf(a);
+        if (!b.ha) {
+          if (200 == a || 206 == a) {
+            a = L(b.B, "Content-Length");
+            var l = L(b.B, "Content-Range"),
+              x = null;
+            l && (l = q.exec(l)) && (a = l[1]);
+            a && (x = parseInt(a));
+            if (0 !== x)
+              if (
+                ((b["2"] = e),
+                (b["8"] = n),
+                (b["7"] = x),
+                (b.type = f),
+                (b.protocol = u),
+                (b["1"] = m),
+                (b.R = O(f, "_frame")),
+                (f = new URL(e)),
+                (e = f.hostname),
+                (f = f.pathname),
+                (m = f.split("/").pop().trim()) &&
+                  (m = m.split("?").shift().trim()),
+                (b.l = m || ""),
+                (b.s = K(b.l)),
+                (b.K = Z(r, "filename") || Z(n, "name")),
+                (b.P = (b.K && K(b.K)) || ""),
+                (n = p ? E[p] : !1),
+                (b.O = (n ? n.split("|").shift() : "").toLowerCase()),
+                (b.g = b.O || b.P || b.s || ""),
+                (b.fileName = b.K || b.l || ""),
+                b.fileName &&
+                  ((n = b.fileName.lastIndexOf(".")),
+                  -1 < n && (b.fileName = b.fileName.substr(0, n).trim())),
+                b.fileName && b.g && (b.fileName += "." + b.g),
+                !p && b.g && (p = ea(b.g)),
+                (n = "main_frame" == b.type && B.test(b.g) && !C.test(b.g)),
+                (r = ["js", "txt", "dict"]),
+                (r = -1 < r.indexOf(b.g) || -1 < r.indexOf(b.s)),
+                P(b.l.toLowerCase(), "manif") ||
+                  P(b.l.toLowerCase(), "favicon.ico") ||
+                  P(b.l.toLowerCase(), "pem.msg") ||
+                  O(b.l.toLowerCase(), ".wasm") ||
+                  P(b.l.toLowerCase(), ".json") ||
+                  P(b.O.toLowerCase(), "json") ||
+                  P(b.P.toLowerCase(), "json") ||
+                  O(b.l.toLowerCase(), ".dict") ||
+                  !(
+                    n ||
+                    ("other" == b.type && B.test(b.g)) ||
+                    ((b.R || !g) && da.test(b.g)) ||
+                    ((b.R || "other" == b.type) &&
+                      ((k && !r) ||
+                        ba.test(p) ||
+                        (b.g && !B.test(b.g) && !ca.test(b.g))))
+                  ))
+              ) {
+                k =
+                  "vtt" == b.g.toLowerCase() ||
+                  "vtt" == b.s.toLowerCase() ||
+                  "srt" == b.g.toLowerCase() ||
+                  "srt" == b.s.toLowerCase();
+                var H = null;
+                "m3u8" == b.g.toLowerCase() || "m3u8" == b.s.toLowerCase()
+                  ? (H = new W(this))
+                  : k ||
+                    "POST" == b["1"] ||
+                    P(e.toLowerCase(), "vimeo") ||
+                    P(e.toLowerCase(), "youtube") ||
+                    P(e.toLowerCase(), "google") ||
+                    ("txt" != b.g.toLowerCase() && "js" != b.g.toLowerCase()) ||
+                    "xmlhttprequest" != b.type ||
+                    (b["7"] && 307200 < b["7"]) ||
+                    (H = new W(this));
+                if (H)
+                  R(
+                    {
+                      2: b["2"],
+                      S: function (t) {
+                        H.i(M({}, b), t);
+                      },
+                    },
+                    M({}, b),
+                  );
+                else if (
+                  g &&
+                  "player.vimeo.com" == e &&
+                  N(f, "/video/") &&
+                  "application/json" == p
+                )
+                  R(
+                    {
+                      2: b["2"],
+                      S: function (t) {
+                        var y = null;
+                        try {
+                          y = JSON.parse(t);
+                        } catch (D) {}
+                        if (y) {
+                          var I = y.request.files.progressive;
+                          I &&
+                            setTimeout(function () {
+                              for (var D = 0; D < I.length; D++)
+                                d.A({
+                                  1: "GET",
+                                  2: I[D].url,
+                                  6: "media",
+                                  tabId: b.tabId,
+                                  frameId: b.frameId,
+                                  fEx: "mp4",
+                                  4: "MP4 File " + I[D].quality,
+                                });
+                            }, 2500);
                         }
-                    } delete this.m[c]
+                      },
+                    },
+                    b,
+                  );
+                else if (
+                  (g || k) &&
+                  (B.test(b.g) || B.test(b.s)) &&
+                  !C.test(b.g) &&
+                  (!b["7"] || 512e3 < b["7"] || k) &&
+                  !("ASF" == b.g && 256e4 >= b["7"]) &&
+                  "DCLK-AdSvr" != L(b.B, "Server")
+                ) {
+                  var J = {
+                    2: b["2"],
+                    6: "media",
+                    1: b["1"],
+                    tabId: b.tabId,
+                    frameId: b.frameId,
+                    fEx: B.test(b.g) ? b.g : b.s,
+                    7: b["7"],
+                    8: b["8"],
+                    fS: b["7"],
+                    fileName: b.fileName,
+                  };
+                  "POST" == J["1"] && S(b, J);
+                  Y(b, J);
+                  setTimeout(function () {
+                    d.A(J);
+                  }, 2e3);
                 }
-            }
+              } else if (h || !this.v) this.u = "";
+              else {
+                if (b.browserDownload) {
+                  this.u = "";
+                } else {
+                  this.u = b["2"];
+                }
+                g = d.h[[b.tabId, b.frameId]];
+                p = d.h[[b.tabId, 0]];
+                var v = M(new T(), {
+                  2: b["2"],
+                  1: b["1"],
+                  4: (p && p["4"]) || (g && g["4"]),
+                  5: (p && p["2"]) || (g && g["2"]),
+                  7: b["7"],
+                  8: b["8"],
+                  pageUrl: (g && g["2"]) || b["2"],
+                });
+                if (b.browserDownload) {
+                  v["x-Download-Mode"] = "browser";
+                }
+                chrome.tabs.query(
+                  {
+                    active: !0,
+                    currentWindow: !0,
+                  },
+                  function (t) {
+                    if (
+                      t &&
+                      t.length &&
+                      (b["2"] == t[0].pendingUrl || b["2"] == t[0].url) &&
+                      !v["5"] &&
+                      t[0].openerTabId
+                    ) {
+                      var y = d.h[[t[0].openerTabId, 0]];
+                      v["5"] = y && y["2"];
+                      v["4"] = y && y["4"];
+                      B.test(b.g) &&
+                        (chrome.tabs.remove(t[0].id), (v["6"] = "media"));
+                    }
+                  },
+                );
+                "POST" == v["1"] && S(b, v);
+                Y(b, v);
+                d.i = v;
+                chrome.cookies.getAll({ url: v["2"] }, d.J);
+              }
+          }
+          delete this.m[c];
         }
+      }
     }
+  }
 };
-function S(a, b) { var c = L(a.o, "Content-Type"), d = L(a.o, "Content-Disposition"); a = fa(a.ja, c); if (!a || 1 > a.length) a = null; b.postData = a; c && (b["10"] = c.trim()); d && (b["11"] = d.trim()) } function Y(a, b) { if (a.o) for (var c = 0; c < a.o.length; c++)N(a.o[c].name.toLowerCase(), "x-") && (b[a.o[c].name] = a.o[c].value) } V.U = function (a) { if (!(0 > a.tabId || 0 > a.frameId)) { var b = this.m[a.requestId]; b && (b.o = a.requestHeaders) } };
-V.T = function (a) {
-    // 检查临时白名单：如果在白名单内，直接放行（不记录、不取消）
-    if (tempWhitelist.has(a.url)) {
-        // 可选：移除已匹配的条目，避免后续重复使用（若想仅放行一次）
-        tempWhitelist.delete(a.url);
-        return; // 让请求正常进行
+// 提取 POST 正文数据和头部值到下载描述符中。
+function S(a, b) {
+  var c = L(a.o, "Content-Type"),
+    d = L(a.o, "Content-Disposition");
+  a = fa(a.ja, c);
+  if (!a || 1 > a.length) a = null;
+  b.postData = a;
+  c && (b["10"] = c.trim());
+  d && (b["11"] = d.trim());
+}
+// 将请求描述符中的 X- 头复制到外发的下载描述符。
+function Y(a, b) {
+  if (a.o)
+    for (var c = 0; c < a.o.length; c++)
+      N(a.o[c].name.toLowerCase(), "x-") && (b[a.o[c].name] = a.o[c].value);
+}
+
+// onBeforeSendHeaders 处理器：存储请求头以便后续下载重构。
+V.U = function (a) {
+  if (!(0 > a.tabId || 0 > a.frameId)) {
+    var b = this.m[a.requestId];
+    b && (b.o = a.requestHeaders);
+  }
+};
+// onBeforeRequest 处理器：捕获下载请求并存储元数据。
+V.T = function (a) { 
+  //console.log("NDM DEBUG: onBeforeRequest event:", a);
+  // ct.js 负责 alt/ctrl/blockedHosts 判断，bg.js 只负责处理下载请求。
+  if (!(0 > a.tabId || 0 > a.frameId)) {
+    if (isURLBlocked(a.url, a.initiator || a.documentUrl || a.originUrl)) {
+      //console.log("NDM DEBUG: skipping blocked host request:", a.url);
+      return;
     }
-    // Added early block check
-    if (isURLBlocked(a.url, a.initiator)) return ;
-    if (!(0 > a.tabId || 0 > a.frameId)) if ("ftp" == Q(a.url)) { if (G(a.url) && !h) { var b = new T, c = this.h[[a.tabId, 0]]; c && c["2"] && (b["5"] = c["2"], b.pageUrl = c["2"]); c && c["4"] && (b["4"] = c["4"]); b["2"] = a.url; this.I(b) } } else b = a.requestId, c = this.m[b] || { id: b, 2: a.url, tabId: a.tabId, frameId: a.frameId }, "POST" == a.method.toUpperCase() && (c.ja = a.requestBody), this.m[b] = c
+    if ("ftp" == Q(a.url)) {
+      if (G(a.url) && !h) {
+        var b = new T(),
+          c = this.h[[a.tabId, 0]];
+        c && c["2"] && ((b["5"] = c["2"]), (b.pageUrl = c["2"]));
+        c && c["4"] && (b["4"] = c["4"]);
+        b["2"] = a.url;
+        this.I(b);
+      }
+    } else
+      ((b = a.requestId),
+        (c = this.m[b] || {
+          id: b,
+          2: a.url,
+          tabId: a.tabId,
+          frameId: a.frameId,
+        }),
+        "POST" == a.method.toUpperCase() && (c.ja = a.requestBody),
+        (this.m[b] = c));
+  }
 };
-function Z(a, b) { if (!a) return null; b = b.toLowerCase(); a = a.split(";"); a.shift(); for (var c = 0; c < a.length; c++) { var d = a[c], e = d.indexOf("="); if (0 < e) { var f = d.substr(0, e).trim().toLowerCase(), g = "*" == f[f.length - 1]; g && (f = f.substr(0, f.length - 1).trimRight()); if (f == b) return a = d.substr(e + 1).trim(), c = a.length - 1, '"' == a[0] && '"' == a[c] && (a = a.substring(1, c)), g && (a = a.split("'", 3).pop()), unescape(a) } else if (0 > e && d.trim().toLowerCase() == b) return "" } return null } V.j = function (a) { a.addListener.apply(a, Array.prototype.slice.call(arguments).slice(1)) };
-V.Z = function (a) { var b = a.sender.tab; if (b && 0 <= b.id) { var c = a.sender.frameId, d = a.id || this.fa++, e = b.id; a.id = d; a["4"] = b.title; a.tabId = e; a.frameId = c; a.ia = 0 == c; a["2"] = a.sender.url || a.ia && b.url || null; a.onMessage.addListener(this.aa.bind(this, a)); a.onDisconnect.addListener(this.$.bind(this, a)); this.H[d] = a; this.h[[e, c]] = a; a.postMessage([3, a.id]); a.postMessage([13, this.F]); a.sender = null } };
+// 从 Content-Type 或 Content-Disposition 头部解析单个参数值。
+function Z(a, b) {
+  if (!a) return null;
+  b = b.toLowerCase();
+  a = a.split(";");
+  a.shift();
+  for (var c = 0; c < a.length; c++) {
+    var d = a[c],
+      e = d.indexOf("=");
+    if (0 < e) {
+      var f = d.substr(0, e).trim().toLowerCase(),
+        g = "*" == f[f.length - 1];
+      g && (f = f.substr(0, f.length - 1).trimRight());
+      if (f == b)
+        return (
+          (a = d.substr(e + 1).trim()),
+          (c = a.length - 1),
+          '"' == a[0] && '"' == a[c] && (a = a.substring(1, c)),
+          g && (a = a.split("'", 3).pop()),
+          unescape(a)
+        );
+    } else if (0 > e && d.trim().toLowerCase() == b) return "";
+  }
+  return null;
+}
+// 向 chrome 事件添加监听器，并将当前方法绑定到此对象。
+V.j = function (a) {
+  a.addListener.apply(a, Array.prototype.slice.call(arguments).slice(1));
+};
+
+// 处理新的内容脚本连接并注册消息/断开回调。
+V.Z = function (a) {
+  var b = a.sender.tab;
+  if (b && 0 <= b.id) {
+    var c = a.sender.frameId,
+      d = a.id || this.fa++,
+      e = b.id;
+    a.id = d;
+    a["4"] = b.title;
+    a.tabId = e;
+    a.frameId = c;
+    a.ia = 0 == c;
+    a["2"] = a.sender.url || (a.ia && b.url) || null;
+    a.onMessage.addListener(this.aa.bind(this, a));
+    a.onDisconnect.addListener(this.$.bind(this, a));
+    this.H[d] = a;
+    this.h[[e, c]] = a;
+    this.sendToPort(a, [3, a.id]);
+    this.sendToPort(a, [13, this.F]);
+    a.sender = null;
+  }
+};
+// 分发从已连接内容脚本接收的消息。
 V.aa = function (a, b) {
-    switch (b[0]) {
-        case 2: var c = b[2], d = b[3]; (a = this.H[b[1]]) && c && (a["2"] = c); a && d && (a["4"] = d); break; case 4: h = b[1]; break; case 6: c = b[1]; a = (a = a.tabId) && this.h[[a, 0]]; var e = new T; e["1"] = c["1"] || "GET"; e["2"] = c["2"]; c["3"] && (e["3"] = c["3"]); e.pageUrl = b[2]; e["4"] = b[3] || a && a["4"] || ""; e["5"] = a && a["2"] || e.pageUrl; e["9"] = b[4]; c["7"] && (e["7"] = c["7"]); c["8"] && (e["8"] = c["8"]); e["6"] = c["6"] || "media"; !c.fEx || "vtt" != c.fEx.toLowerCase() && "srt" != c.fEx.toLowerCase() || (e["6"] = "normal"); c.postData && (e.postData =
-            c.postData); c["10"] && (e["10"] = c["10"]); c["11"] && (e["11"] = c["11"]); for (d in c) N(d.toLowerCase(), "x-") && (e[d] = c[d]); this.i = e; chrome.cookies.getAll({ url: e["2"] }, this.J)
+  switch (b[0]) {
+    case 2:
+      var c = b[2],
+        d = b[3];
+      (a = this.H[b[1]]) && c && (a["2"] = c);
+      a && d && (a["4"] = d);
+      break;
+    case 4:
+      h = b[1];
+      break;
+    case 6:
+      c = b[1];
+      a = (a = a.tabId) && this.h[[a, 0]];
+      var e = new T();
+      e["1"] = c["1"] || "GET";
+      e["2"] = c["2"];
+      c["3"] && (e["3"] = c["3"]);
+      e.pageUrl = b[2];
+      e["4"] = b[3] || (a && a["4"]) || "";
+      e["5"] = (a && a["2"]) || e.pageUrl;
+      e["9"] = b[4];
+      c["7"] && (e["7"] = c["7"]);
+      c["8"] && (e["8"] = c["8"]);
+      e["6"] = c["6"] || "media";
+      !c.fEx ||
+        ("vtt" != c.fEx.toLowerCase() && "srt" != c.fEx.toLowerCase()) ||
+        (e["6"] = "normal");
+      c.postData && (e.postData = c.postData);
+      c["10"] && (e["10"] = c["10"]);
+      c["11"] && (e["11"] = c["11"]);
+      for (d in c) N(d.toLowerCase(), "x-") && (e[d] = c[d]);
+      this.i = e;
+      chrome.cookies.getAll({ url: e["2"] }, this.J);
+      break;
+  }
+};
+// 从内部映射中移除已断开连接的内容脚本。
+V.$ = function (a) {
+  for (var b in this.h) this.h[b] == a && delete this.h[b];
+  delete this.H[a.id];
+};
+
+// 向所有匹配标签页/框架键前缀的内容脚本广播消息。
+V.la = function (a, b) {
+  var c = this.h;
+  a = a.toString() + ",";
+  for (var d in c) N(d, a) && this.sendToPort(c[d], b);
+};
+// 向所有已连接的内容脚本广播消息。
+V.ga = function (a) {
+  var b = this.h,
+    c;
+  for (c in b) this.sendToPort(b[c], a);
+};
+bgInstance = new U();
+
+// 上下文菜单点击处理器，用于阻止或解除阻止当前站点。
+chrome.contextMenus.onClicked.addListener(function (info, tab) {
+  if (info.menuItemId === "NDM_BlockSite") {
+    var url = tab.url;
+    try {
+      var hostname = new URL(url).hostname;
+      if (hostname) {
+        chrome.storage.local.get(["blockedHosts"], function (result) {
+          var blockedHosts = result.blockedHosts || [];
+          var index = blockedHosts.indexOf(hostname);
+          if (index !== -1) {
+            blockedHosts.splice(index, 1);
+            //console.log("Unblocked: " + hostname);
+          } else {
+            blockedHosts.push(hostname);
+            //console.log("Blocked: " + hostname);
+          }
+          chrome.storage.local.set({ blockedHosts: blockedHosts }, function () {
+            updateContextMenu(tab.id);
+          });
+        });
+      }
+    } catch (e) {
+      console.error(e);
     }
-}; V.$ = function (a) { for (var b in this.h) this.h[b] == a && delete this.h[b]; delete this.H[a.id] }; V.la = function (a, b) { var c = this.h; a = a.toString() + ","; for (var d in c) N(d, a) && c[d].postMessage(b) }; V.ga = function (a) { var b = this.h, c; for (c in b) b[c].postMessage(a) }; new U;
-chrome.contextMenus.onClicked.addListener(function (info, tab) { if (info.menuItemId === "NDM_BlockSite") { var url = tab.url; try { var hostname = new URL(url).hostname; if (hostname) { chrome.storage.local.get(["blockedHosts"], function (result) { var blockedHosts = result.blockedHosts || []; var index = blockedHosts.indexOf(hostname); if (index !== -1) { blockedHosts.splice(index, 1); console.log("Unblocked: " + hostname); } else { blockedHosts.push(hostname); console.log("Blocked: " + hostname); } chrome.storage.local.set({ blockedHosts: blockedHosts }, function () { updateContextMenu(tab.id); }); }); } } catch (e) { console.error(e); } } });
+  }
+});
