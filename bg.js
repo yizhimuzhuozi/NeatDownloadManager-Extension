@@ -1,6 +1,4 @@
 var blockedHosts = [];
-// 临时放行的 URL 白名单，使用 Set 存储
-const tempWhitelist = new Set();
 function updateBlockedHosts() {
     chrome.storage.local.get(['blockedHosts'], function (result) {
         blockedHosts = result.blockedHosts || [];
@@ -39,18 +37,10 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
         updateContextMenu(tabId);
     }
 });
-chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
-    if (message.action === 'tempWhitelist' && message.url) {
-        // 标准化 URL（例如移除末尾的 / 或查询参数？但最好保留原样）
-        const url = message.url;
-        tempWhitelist.add(url);
-        //console.log('临时放行 URL:', url);
-
-        // 5 秒后自动移除
-        setTimeout(() => {
-            tempWhitelist.delete(url);
-            //console.log('临时放行过期:', url);
-        }, 5000);
+// ct.js 通过 sendMessage 通知 SW 写入 bypass 标记（避开 content script 的 storage 访问限制）
+chrome.runtime.onMessage.addListener(function (msg) {
+    if (msg.action === "__ndm_bypass") {
+        chrome.storage.session.set({ __ndm_bypass: Date.now() });
     }
 });
 var h = !1, q = RegExp("^bytes [0-9]+-[0-9]+/([0-9]+)$"), w = "object xmlhttprequest media other main_frame sub_frame image".split(" "), z = ["object", "xmlhttprequest", "media", "other"], A = RegExp("://.+/([^/]+?(?:.([^./]+?))?)(?=[?#]|$)"), aa = [301, 302, 303, 307, 308], ba = RegExp("^(?:application/x-apple-diskimage|application/download|application/force-download|application/x-msdownload|binary/octet-stream)$", "i"), B = RegExp("^(?:FLV|SWF|MP3|MP4|M4V|F4F|F4V|M4A|MPG|MPEG|MPEG4|MPE|AVI|WMV|WMA|WAV|WAVE|ASF|RM|RAM|OGG|OGV|OGM|OGA|MOV|MID|MIDI|3GP|3GPP|QT|WEBM|TS|MKV|AAC|MP2T|MPEGTS|RMVB|VTT|SRT)$",
@@ -73,14 +63,14 @@ function U() {
     }, ["requestBody"]); this.j(chrome.webRequest.onBeforeSendHeaders, this.U, { urls: ["https://*/*", "http://*/*"], types: w }, ["requestHeaders"]); this.j(chrome.webRequest.onHeadersReceived, this.V, { urls: ["<all_urls>"], types: w }, ["responseHeaders"]); this.j(chrome.webRequest.onCompleted, this.N, { urls: ["<all_urls>"] }); this.j(chrome.webRequest.onErrorOccurred, this.N, { urls: ["<all_urls>"] }); this.j(chrome.webNavigation.onHistoryStateUpdated, this.Y); chrome.action.onClicked.addListener(this.M); this.v = !1; chrome.action.setBadgeBackgroundColor({ color: "#FF3333" });
     this.M(); var c = this; this.F = !0; chrome.storage.local.get(["ShowMediaPanel"], function (d) { -1 == d.ShowMediaPanel && (c.F = !1) }); this.i = this.G = null; this.D = !1; this.L()
 } var V = U.prototype; V.M = function () { var a = (this.v = !this.v) ? "" : "Off"; chrome.action.setTitle({ title: this.v ? "" : "Download catcher is Off\r\nClick to toggle catching" }); chrome.action.setBadgeText({ text: a }) }; V.Y = function (a) { var b = this.h[[a.tabId, a.frameId]]; b && b["2"] != a.url && (b.postMessage([11, a.url]), b["2"] = a.url) };
-V.X = function (a) {
-    // 检查白名单
-    if (tempWhitelist.has(a.url) || tempWhitelist.has(a.finalUrl)) {
-        // 若匹配，从白名单移除并放行（不取消）
-        tempWhitelist.delete(a.url);
-        tempWhitelist.delete(a.finalUrl);
-        return;
-    }
+V.X = async function (a) {
+    // Ctrl/Alt/Meta/Shift 绕过检查（3 秒宽限期，由 ct.js keydown 写入 storage.session）
+    try {
+        var bypass = await chrome.storage.session.get("__ndm_bypass");
+        if (bypass.__ndm_bypass && Date.now() - bypass.__ndm_bypass < 3000) {
+            return;
+        }
+    } catch (e) {}
     // Added early block check for downloads
     if (isURLBlocked(a.url, a.referrer) || isURLBlocked(a.finalUrl, a.referrer)) {
         return;
@@ -110,11 +100,14 @@ function fa(a, b) {
     if (!a) return null; var c = a.raw; if (c) { a = ""; for (b = 0; b < c.length; b++) { var d = c[b].bytes; if (!d) return null; d = new Uint8Array(d); for (var e = d.length, f = 0; f < e; f++)a += String.fromCharCode(d[f]) } return a } c = a.formData; if (!c) return null; e = F(b); a = []; e &&= e.toLowerCase(); if ("application/x-www-form-urlencoded" == e) { for (d in c) for (e = c[d], d = d.split(" ").map(encodeURIComponent).join("+"), b = 0; b < e.length; b++)a.length && a.push("&"), a.push(d, "=", e[b].split(" ").map(encodeURIComponent).join("+")); return a.join("") } if ("multipart/form-data" ==
         e) { (f = Z(b, "boundary")) || (f = "----WebKitFormBoundary" + Math.random().toString(36).substr(2)); for (d in c) for (e = c[d], b = 0; b < e.length; b++)a.push("--", f, '\r\nContent-Disposition: form-data; name="', d, '"\r\n\r\n', e[b], "\r\n"); a.push("--", f, "--\r\n"); return a.join("") } return null
 }
-V.V = function (a) {
-    if (tempWhitelist.has(a.url)) {
-        tempWhitelist.delete(a.url);
-        return;
-    }
+V.V = async function (a) {
+    // Ctrl/Alt/Meta/Shift 绕过检查（3 秒宽限期）
+    try {
+        var bypass_v = await chrome.storage.session.get("__ndm_bypass");
+        if (bypass_v.__ndm_bypass && Date.now() - bypass_v.__ndm_bypass < 3000) {
+            return;
+        }
+    } catch (e) {}
     if (isURLBlocked(a.url, a.initiator)) return; var b, c = a.requestId, d = this; if (b = this.m[c]) {
         var e = a.url, f = a.type, g = 0 <= z.indexOf(f), m = a.method.toUpperCase(), u = Q(e); if (!u || "http" != u && "https" != u || "GET" != m && "POST" != m) delete this.m[c]; else {
             b.B = a.responseHeaders; var n = L(b.B, "Content-Type"), p = F(n).toLowerCase(); if ("image" == f && p && N(p.toLowerCase(), "image/")) delete this.m[c]; else {
@@ -140,13 +133,14 @@ V.V = function (a) {
     }
 };
 function S(a, b) { var c = L(a.o, "Content-Type"), d = L(a.o, "Content-Disposition"); a = fa(a.ja, c); if (!a || 1 > a.length) a = null; b.postData = a; c && (b["10"] = c.trim()); d && (b["11"] = d.trim()) } function Y(a, b) { if (a.o) for (var c = 0; c < a.o.length; c++)N(a.o[c].name.toLowerCase(), "x-") && (b[a.o[c].name] = a.o[c].value) } V.U = function (a) { if (!(0 > a.tabId || 0 > a.frameId)) { var b = this.m[a.requestId]; b && (b.o = a.requestHeaders) } };
-V.T = function (a) {
-    // 检查临时白名单：如果在白名单内，直接放行（不记录、不取消）
-    if (tempWhitelist.has(a.url)) {
-        // 可选：移除已匹配的条目，避免后续重复使用（若想仅放行一次）
-        tempWhitelist.delete(a.url);
-        return; // 让请求正常进行
-    }
+V.T = async function (a) {
+    // Ctrl/Alt/Meta/Shift 绕过检查（3 秒宽限期）
+    try {
+        var bypass_t = await chrome.storage.session.get("__ndm_bypass");
+        if (bypass_t.__ndm_bypass && Date.now() - bypass_t.__ndm_bypass < 3000) {
+            return;
+        }
+    } catch (e) {}
     // Added early block check
     if (isURLBlocked(a.url, a.initiator)) return ;
     if (!(0 > a.tabId || 0 > a.frameId)) if ("ftp" == Q(a.url)) { if (G(a.url) && !h) { var b = new T, c = this.h[[a.tabId, 0]]; c && c["2"] && (b["5"] = c["2"], b.pageUrl = c["2"]); c && c["4"] && (b["4"] = c["4"]); b["2"] = a.url; this.I(b) } } else b = a.requestId, c = this.m[b] || { id: b, 2: a.url, tabId: a.tabId, frameId: a.frameId }, "POST" == a.method.toUpperCase() && (c.ja = a.requestBody), this.m[b] = c
@@ -159,4 +153,24 @@ V.aa = function (a, b) {
             c.postData); c["10"] && (e["10"] = c["10"]); c["11"] && (e["11"] = c["11"]); for (d in c) N(d.toLowerCase(), "x-") && (e[d] = c[d]); this.i = e; chrome.cookies.getAll({ url: e["2"] }, this.J)
     }
 }; V.$ = function (a) { for (var b in this.h) this.h[b] == a && delete this.h[b]; delete this.H[a.id] }; V.la = function (a, b) { var c = this.h; a = a.toString() + ","; for (var d in c) N(d, a) && c[d].postMessage(b) }; V.ga = function (a) { var b = this.h, c; for (c in b) b[c].postMessage(a) }; new U;
-chrome.contextMenus.onClicked.addListener(function (info, tab) { if (info.menuItemId === "NDM_BlockSite") { var url = tab.url; try { var hostname = new URL(url).hostname; if (hostname) { chrome.storage.local.get(["blockedHosts"], function (result) { var blockedHosts = result.blockedHosts || []; var index = blockedHosts.indexOf(hostname); if (index !== -1) { blockedHosts.splice(index, 1); console.log("Unblocked: " + hostname); } else { blockedHosts.push(hostname); console.log("Blocked: " + hostname); } chrome.storage.local.set({ blockedHosts: blockedHosts }, function () { updateContextMenu(tab.id); }); }); } } catch (e) { console.error(e); } } });
+chrome.contextMenus.onClicked.addListener(function (info, tab) {
+    if (info.menuItemId === "NDM_BlockSite") {
+        var url = tab.url;
+        try {
+            var hostname = new URL(url).hostname;
+            if (hostname) {
+                chrome.storage.local.get(["blockedHosts"], function (result) {
+                    var hosts = result.blockedHosts || [];
+                    var index = hosts.indexOf(hostname);
+                    if (index !== -1) { hosts.splice(index, 1); }
+                    else { hosts.push(hostname); }
+                    // 同步更新内存中的 blockedHosts，确保 updateContextMenu 读到最新值
+                    blockedHosts = hosts;
+                    chrome.storage.local.set({ blockedHosts: hosts }, function () {
+                        updateContextMenu(tab.id);
+                    });
+                });
+            }
+        } catch (e) { console.error(e); }
+    }
+});
