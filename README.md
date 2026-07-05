@@ -53,6 +53,15 @@
 2026-3-16
 
 - 修复被屏蔽的网站所有下载链接会被拦截问题，现在被屏蔽的网址所有的下载链接都会绕过NDM且被放行
-  - [Leenshady](https://github.com/Leenshady)  提供帮助
+  - [Leenshady](https://github.com/Leenshady) 提供帮助
 - 增加临时绕过NDM下载功能，按住Ctrl键点击下载链接可以绕过NDM进行下载
-  - [Leenshady](https://github.com/Leenshady)  提供帮助
+  - [Leenshady](https://github.com/Leenshady) 提供帮助
+
+2026-07-05
+
+  - 均有 [Leenshady](https://github.com/Leenshady) 提供帮助
+
+1. 优化绕过NDM下载的逻辑，提高成功率；
+2. 修复某些情况下blockhosts失效、关闭扩展失效的问题；
+3. 修复上下文菜单块下载和ublock下载名称更新不及时问题；
+3. 增加绕过下载的热键，现在按住ctrl、alt、Windows/Command、shift键点击下载链接绕过NDM进行下载。
