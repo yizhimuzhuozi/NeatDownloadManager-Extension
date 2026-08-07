@@ -19,6 +19,8 @@
   <img src="./im/之后.jpeg" alt="NeatDownloadManager" width="100%">
 </p>
 
+## Firefox 火狐浏览器
+如果你是 Firefox 用户你可以使用这个项目 [iiHawe](https://github.com/iiHawe/NeatDownloadManager-Extension)
 
 ## Chrome 安装
 
