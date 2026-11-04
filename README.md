@@ -89,8 +89,8 @@
 
 2026-11-04 均有 [umlearn](https://github.com/umlearn) 提供帮助
 - 优化悬浮条样式，更加简洁
-<p align="center">
-  <img src="./im/Cl 2025-12-30 09.12.22.png" alt="NeatDownloadManager" width="50%">
+  <p align="Left">
+  <img src="./im/Floating Bar.png" alt="NeatDownloadManager" width="50%">
 </p>
 
 - 下载嗅探能力优化
