@@ -72,29 +72,26 @@
 * 修改 README.md
 
 
-2026-10-16
+2026-10-16 均有 [umlearn](https://github.com/umlearn) 提供帮助
 
 - 视频下载浮条改为简约深色圆角样式，默认低透明度；鼠标悬停或键盘聚焦时完全显示并展开下载列表。
 - 浮条跟随视频位置，支持页面及嵌套容器滚动；锚点滚出可视范围时隐藏，避免停留在页面边缘。
 - 点击 × 可隐藏当前浮条；新发现的资源不会重新打开已关闭的浮条，刷新页面后恢复。
-
 - 浮条仅保留下载图标，显示在视频左上角内侧，距顶部及左边缘 8px；保留低透明度及悬停展开效果。
 - 定位更新改为滚动、尺寸及 DOM 变化触发，同一帧合并处理；可见视频每 500ms 补充位置检查，关闭、离屏及后台页面暂停持续位置检查。
 
-2026-10-17
+- 优化悬浮条样式，更加简洁
+  <p align="Left">
+  <img src="./im/Floating Bar.png" alt="NeatDownloadManager" width="50%">
+</p>
+
+2026-10-17 均有 [umlearn](https://github.com/umlearn) 提供帮助
 
 - 优化媒体嗅探：识别 HLS 清单及音轨，保留小体积完整视频。
 - 改进播放器关联及下载浮条定位，支持 `<source>`、`currentSrc` 和开放的 Shadow DOM。
 - HLS/TS 优先按视频或页面标题命名；修复请求时序及快捷键绕过范围，并保留 NDM 原下载流程。
 
 2026-11-04 均有 [umlearn](https://github.com/umlearn) 提供帮助
-- 优化悬浮条样式，更加简洁
-  <p align="Left">
-  <img src="./im/Floating Bar.png" alt="NeatDownloadManager" width="50%">
-</p>
-
-- 下载嗅探能力优化
-- 修复某些网站无法显示下载浮条
 
 
 <div align="center">
