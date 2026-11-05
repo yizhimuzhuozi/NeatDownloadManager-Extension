@@ -83,15 +83,13 @@
 - 优化悬浮条样式，更加简洁
   <p align="Left">
   <img src="./im/Floating Bar.png" alt="NeatDownloadManager" width="50%">
-</p>
+  </p>
 
 2026-10-17 均有 [umlearn](https://github.com/umlearn) 提供帮助
 
 - 优化媒体嗅探：识别 HLS 清单及音轨，保留小体积完整视频。
 - 改进播放器关联及下载浮条定位，支持 `<source>`、`currentSrc` 和开放的 Shadow DOM。
 - HLS/TS 优先按视频或页面标题命名；修复请求时序及快捷键绕过范围，并保留 NDM 原下载流程。
-
-2026-11-04 均有 [umlearn](https://github.com/umlearn) 提供帮助
 
 
 <div align="center">
