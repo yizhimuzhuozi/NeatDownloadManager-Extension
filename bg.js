@@ -74,7 +74,7 @@ var h = !1, q = RegExp("^bytes [0-9]+-[0-9]+/([0-9]+)$"), w = "object xmlhttpreq
     };
 function F(a) { return a && unescape(a.split(";", 1).shift().trim()) || "" } function G(a) { return (a = A.exec(a)) ? a[1] || "" : "" } function K(a) { return -1 < a.indexOf(".") ? a.split(".").pop() : "" } function ea(a) { var b; a = a.toUpperCase(); for (b in E) if (-1 < E[b].split("|").indexOf(a)) return b; return "" } function L(a, b) { if (!a) return null; for (var c = 0; c < a.length; c++)if (a[c].name.toLowerCase() == b.toLowerCase()) return a[c].value || a[c].binaryValue || null; return null }
 function M() { for (var a = {}, b = 0; b < arguments.length; b++)for (var c in arguments[b]) arguments[b].hasOwnProperty(c) && (a[c] = arguments[b][c]); return a } function N(a, b) { return a && b && 0 == a.indexOf(b) } function O(a, b) { if (!a || !b) return !1; var c = a.length - b.length; return 0 <= c && a.indexOf(b, c) == c } function P(a, b) { return a && b && 0 <= a.indexOf(b) } function Q(a) { return P(a, "://") ? a.split("://", 1).shift().toLowerCase() || "" : "http" }
-async function R(a, b) { var c = null, d = {}, e, f = b && b["1"] || "GET"; if (b && (e = b.o)) for (var g = 0; g < e.length; g++)N(e[g].name.toLowerCase(), "x-") && (d[e[g].name] = e[g].value); if ("POST" == f && b) { try { S(b, b), b["10"] && (d["Content-Type"] = b["10"]) } catch (m) { } b && b.postData && (c = b.postData) } try { const m = await fetch(a["2"], { method: f, credentials: "include", headers: new Headers(d), body: c }); if (m.ok) { let u = await m.text(); (a.S || function () { })(u) } } catch (m) { } }
+async function R(a, b) { var c = null, d = {}, e, f = b && b["1"] || "GET"; if (b && (e = b.o)) for (var g = 0; g < e.length; g++)N(e[g].name.toLowerCase(), "x-") && (d[e[g].name] = e[g].value); if ("POST" == f && b) { try { S(b, b), b["10"] && (d["Content-Type"] = b["10"]) } catch (m) { } b && b.postData && (c = b.postData) } try { const m = await fetch(a["2"], { method: f, credentials: "same-origin", headers: new Headers(d), body: c }); if (m.ok) { let u = await m.text(); (a.S || function () { })(u) } } catch (m) { } }
 function T() { this["1"] = "GET"; this["2"] = ""; this["3"] = ""; this["4"] = ""; this["5"] = ""; this["6"] = "normal"; this["7"] = 0; this["8"] = ""; this["9"] = ""; this["10"] = ""; this.cookies = this["11"] = ""; this.postData = null }
 function U() {
     var a = this.constructor.prototype, b; for (b in a) this[b] = a[b].bind(this); this.H = {}; this.h = {}; this.m = {}; this.hlsSeen = new Map(); this.hlsProbes = new Map(); this.nextHlsProbe = 1; this.sentMedia = new Map(); this.pendingMedia = new Map(); this.fa = 1; this.u = ""; this.C = !1; chrome.contextMenus.removeAll(); chrome.contextMenus.create({ title: "Download", id: "NDM_CtxMenu", contexts: ["link", "image"] }); chrome.contextMenus.create({ id: "NDM_BlockSite", title: "Block downloads", contexts: ["all"] }); this.j(chrome.contextMenus.onClicked, this.W); this.j(chrome.downloads.onCreated, this.X); this.j(chrome.runtime.onConnect, this.Z); this.j(chrome.webRequest.onBeforeRequest, this.T, {
@@ -95,7 +95,7 @@ V.I = async function (a) {
     if (this.D) {
         var b = "1:" + a["1"] + "\r\n"; b += "2:" + a["2"] + "\r\n"; a["3"] && (b += "3:" + a["3"] + "\r\n"); b += "6:" + (a["6"] || "normal") + "\r\n"; a["4"] && (b += "4:" + a["4"] + "\r\n"); if (a.pageUrl) { var c = a.pageUrl, d = ""; c &&= c.trim(); c && (d = (new URL(c)).origin); b += "Origin: " + d + "\r\n" } if (a.pageUrl) { if (c = a.pageUrl) d = c.lastIndexOf("#"), c = 0 > d || d < c.indexOf("?") ? c : c.substr(0, d); b += "Referer: " + c + "\r\n" } a["5"] && (b += "5:" + a["5"] + "\r\n"); a.cookies && (b += "Cookie: " + a.cookies + "\r\n"); a["10"] && (b += "Content-Type: " + a["10"] +
             "\r\n"); a["11"] && (b += "Content-Disposition: " + a["11"] + "\r\n"); a["9"] && (b += "9:" + a["9"] + "\r\n"); for (var e in a) N(e.toLowerCase(), "x-") && (b += e + ": " + a[e] + "\r\n"); "POST" == a["1"] && (a["7"] && (b += "7:" + a["7"] + "\r\n"), a["8"] && (b += "8:" + a["8"] + "\r\n"), b = a.postData ? b + ("__0NeatPostData9__:" + a.postData) : b + "Content-Length: 0\r\n"); if (!(118784 < b.length)) if (a["3"]) this.G.send(b), this.i = null; else if ("POST" == a["1"] || !this.C || a["7"] && a["8"]) "POST" != a["1"] && this.C && (b += "8:" + a["8"] + "\r\n", b += "7:" + a["7"] + "\r\n"), this.G.send(b),
-                this.i = null; else try { const f = await fetch(a["2"], { method: "HEAD", credentials: "include" }); f.ok && (a["8"] = a["8"] || f.headers.get("content-type") || "", a["7"] = a["7"] || f.headers.get("Content-Length") || 0, b += "8:" + a["8"] + "\r\n", b += "7:" + a["7"] + "\r\n", this.G.send(b), this.i = null) } catch (f) { }
+                this.i = null; else try { const f = await fetch(a["2"], { method: "HEAD", credentials: "same-origin" }); f.ok && (a["8"] = a["8"] || f.headers.get("content-type") || "", a["7"] = a["7"] || f.headers.get("Content-Length") || 0, b += "8:" + a["8"] + "\r\n", b += "7:" + a["7"] + "\r\n", this.G.send(b), this.i = null) } catch (f) { }
     } else this.i = a, this.L()
 }; V.L = function () { var a = new WebSocket("ws://127.0.0.1:10007/download", "neatextension.v1"); a.onopen = this.ea; a.onclose = this.ba; a.onmessage = this.da; a.onerror = this.ca; this.G = a };
 V.ea = function () { this.D = !0; this.i && this.I(this.i) }; V.ba = function () { this.D = !1; this.i = null }; V.da = function (a) { a = a.data; "waiting" == a ? this.C = !0 : "nowaiting" == a ? this.C = !1 : !P(a, "Version") && N(a, "ShowPanelChrome") && (a = "1" == a.split("=")[1], a != this.F && (this.F = a, chrome.storage.local.set({ ka: a ? 1 : -1 }, function () { }), this.ga([13, a]))) }; V.ca = function () { this.D = !1; if (this.i) { var a = this; chrome.tabs.query({ currentWindow: !0, active: !0 }, function (b) { b && b.length && (b = a.h[[b[0].id, 0]]) && b.postMessage([15]) }) } this.i = null };
@@ -152,11 +152,15 @@ V.processHls = async function (request, mime) {
     var timeout = setTimeout(function () { controller.abort(); }, 8000);
     var parsed = null;
     try {
+        var target = new URL(request.url);
+        if (target.protocol !== "http:" && target.protocol !== "https:") throw new Error("unsupported URL");
+        var sameOrigin = false;
+        try { sameOrigin = !!request.initiator && new URL(request.initiator).origin === target.origin; } catch (e) { }
         var headers = new Headers();
         for (var header of request.headers || [])
-            if (/^(?:x-|authorization$|accept$)/i.test(header.name) && header.value)
+            if (header.value && (/^accept$/i.test(header.name) || sameOrigin && /^(?:x-|authorization$)/i.test(header.name)))
                 headers.set(header.name, header.value);
-        var response = await fetch(request.url, { credentials: "include", headers: headers, signal: controller.signal });
+        var response = await fetch(request.url, { credentials: "same-origin", headers: headers, signal: controller.signal });
         var length = Number(response.headers.get("Content-Length"));
         if (response.ok && (!length || length <= 1048576)) {
             var text = await readPlaylistLimited(response, 1048576);
@@ -233,7 +237,7 @@ V.V = function (a) {
             if (mediaKind === "hls") {
                 delete this.m[c];
                 if ((a.statusCode === 200 || a.statusCode === 206) && a.method === "GET")
-                    this.processHls({ url: a.url, tabId: a.tabId, frameId: a.frameId, headers: b.o }, n);
+                    this.processHls({ url: a.url, tabId: a.tabId, frameId: a.frameId, headers: b.o, initiator: a.initiator }, n);
                 return;
             }
             if ("image" == f && p && N(p.toLowerCase(), "image/")) delete this.m[c]; else {

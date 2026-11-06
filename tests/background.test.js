@@ -186,3 +186,40 @@ test('HLS download suggests the top tab title without forcing a filename', async
     assert.match(wire[0], /4:真正的视频名称 - 站点\r\n/);
     assert.deepEqual(headRequests, ['HEAD']);
 });
+
+async function hlsFetchHeaders(url, initiator) {
+    const calls = [];
+    const { callbacks } = setup(undefined, true, async (u, options) => {
+        calls.push({ url: u, options });
+        return { ok: true, headers: { get: () => null }, text: async () => '#EXTM3U\n#EXTINF:4,\nseg.ts\n#EXT-X-ENDLIST' };
+    });
+    const base = { requestId: 'h', url, tabId: 1, frameId: 0, type: 'xmlhttprequest', method: 'GET', initiator };
+    callbacks.beforeRequest[0](base);
+    callbacks.beforeHeaders[0]({ ...base, requestHeaders: [{ name: 'Authorization', value: 'Bearer t' },
+        { name: 'X-Token', value: 'secret' }, { name: 'Accept', value: '*/*' }] });
+    callbacks.headers[0]({ ...base, statusCode: 200, statusLine: 'HTTP/1.1 200 OK',
+        responseHeaders: [{ name: 'Content-Type', value: 'application/vnd.apple.mpegurl' }] });
+    await new Promise(resolve => setImmediate(resolve));
+    return calls.find(call => call.url === url);
+}
+
+test('same-origin HLS fetch forwards Authorization and x-* headers without ambient cross-site credentials', async () => {
+    const call = await hlsFetchHeaders('https://example.test/a.m3u8', 'https://example.test/');
+    assert.equal(call.options.credentials, 'same-origin');
+    assert.equal(call.options.headers.get('authorization'), 'Bearer t');
+    assert.equal(call.options.headers.get('x-token'), 'secret');
+});
+
+test('cross-origin HLS fetch still happens but drops Authorization and x-* headers', async () => {
+    const call = await hlsFetchHeaders('https://cdn.test/a.m3u8', 'https://example.test/');
+    assert.equal(call.options.credentials, 'same-origin');
+    assert.equal(call.options.headers.get('authorization'), null);
+    assert.equal(call.options.headers.get('x-token'), null);
+    assert.equal(call.options.headers.get('accept'), '*/*');
+});
+
+test('HLS fetch without a known initiator fails closed on sensitive headers', async () => {
+    const call = await hlsFetchHeaders('https://cdn.test/a.m3u8', undefined);
+    assert.equal(call.options.headers.get('authorization'), null);
+    assert.equal(call.options.headers.get('x-token'), null);
+});

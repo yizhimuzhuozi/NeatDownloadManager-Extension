@@ -395,7 +395,7 @@ if (!window.m) {
         var timer = setTimeout(function () { controller.abort(); }, 7000);
         try {
             if (!/^https?:\/\//i.test(url)) throw new Error("invalid URL");
-            var response = await fetch(url, { credentials: "include", signal: controller.signal });
+            var response = await fetch(url, { credentials: "same-origin", signal: controller.signal });
             if (!response.ok) error = "HTTP " + response.status;
             else {
                 var reader = response.body && response.body.getReader && response.body.getReader();
